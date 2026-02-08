@@ -1,0 +1,43 @@
+# Node
+node_modules/
+npm-debug.log*
+package-lock.json
+yarn.lock
+
+# Environment
+.env
+.env.*
+
+# VSCode
+.vscode/
+
+# Mac / system
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Docker
+docker-compose.override.yml
+
+# OS files
+*.tmp
+
+# Ignore local build artifacts
+dist/
+build/
+
+# Ignore Python envs
+venv/
+.envrc
+
+# Ignore JetBrains
+.idea/
+
+# Ignore installed dependencies for backend (if present)
+backend/node_modules/
+
+# Keep uploads in repo (do not ignore) — remove this section if you want to exclude large files
+# uploads/

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Upload Documents</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Icons -->
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
+</head>
+
+<body>
+
+  <div id="app-container">
+    <main class="panel">
+
+      <!-- Header -->
+      <header class="panel-head">
+        <div class="brand-group">
+          <button class="icon-btn" onclick="history.back()">
+            <span class="material-symbols-rounded">arrow_back</span>
+          </button>
+          <div class="brand-text" style="font-size:16px;">Add Documents</div>
+        </div>
+        <div class="status-bar" style="margin:0; padding:4px 10px;">
+          <span class="status-text">Local Processing Only</span>
+        </div>
+      </header>
+
+      <!-- Dropzone -->
+      <div id="dropzone" class="dropzone-container">
+        <div class="drop-icon-circle">
+          <span class="material-symbols-rounded" style="font-size:32px; color:#2E8EFF;">upload_file</span>
+        </div>
+        <h3 style="margin:16px 0 8px; font-size:18px;">Upload PDFs</h3>
+        <p style="color:var(--text-muted); font-size:14px; margin-bottom:24px; max-width:260px;">
+          Tap to browse or drag files here to start on-device embedding
+        </p>
+        <button id="selectBtn" class="primary-btn" style="width: auto; padding: 12px 32px;">
+          Select Files
+        </button>
+        <input type="file" id="fileInput" accept=".pdf" style="display:none;" />
+      </div>
+
+      <!-- Recent Uploads -->
+      <div id="recent-list" style="margin-top:32px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <h4 style="font-size:14px; color:white;">Recent Uploads</h4>
+          <span id="fileCount" style="font-size:12px; color:var(--accent-blue);">0 Files</span>
+        </div>
+
+        <div id="recent-files" class="sources-list">
+          <!-- Injected by upload.js -->
+        </div>
+
+        <div
+          style="margin-top:24px; padding:12px; border-radius:12px; background:rgba(255,255,255,0.03); display:flex; align-items:center; gap:8px;">
+          <span class="material-symbols-rounded" style="color:var(--text-muted); font-size:18px;">shield</span>
+          <span style="font-size:11px; color:var(--text-muted);">All data stays on this device. No cloud storage
+            used.</span>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Navigation -->
+    <nav class="bottom-nav">
+      <a href="index.html" class="nav-item">
+        <span class="material-symbols-rounded">chat_bubble</span>
+        <span class="label">Chat</span>
+      </a>
+      <a href="upload.html" class="nav-item active">
+        <span class="material-symbols-rounded">add_circle</span>
+        <span class="label">Upload</span>
+      </a>
+      <a href="explore.html" class="nav-item">
+        <span class="material-symbols-rounded">folder</span>
+        <span class="label">Library</span>
+      </a>
+    </nav>
+
+  </div>
+
+  <script type="module" src="upload.js"></script>
+</body>
+
+</html>

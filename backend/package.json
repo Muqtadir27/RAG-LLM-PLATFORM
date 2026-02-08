@@ -1,0 +1,26 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "Local RAG backend (free, offline)",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "rag",
+    "llm",
+    "faiss",
+    "ollama"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "fs-extra": "^11.3.3",
+    "multer": "^2.0.2",
+    "node-fetch": "^3.3.2",
+    "pdf-parse": "^2.4.5"
+  }
+}

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>How It Works</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Icons -->
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
+</head>
+
+<body>
+
+  <div id="app-container">
+    <main class="panel">
+
+      <!-- Header -->
+      <header class="panel-head">
+        <div class="brand-group">
+          <button class="icon-btn" onclick="history.back()">
+            <span class="material-symbols-rounded">arrow_back</span>
+          </button>
+          <div class="brand-text" style="font-size:16px;">Process Overview</div>
+        </div>
+      </header>
+
+      <!-- Content -->
+      <div style="text-align:center; margin-bottom:32px; padding-top:10px;">
+        <h2 style="font-size:24px; margin-bottom:8px;">Understand the <span
+            style="color:var(--accent-blue);">Magic</span></h2>
+        <p style="color:var(--text-muted); font-size:14px; line-height:1.5; padding:0 10px;">
+          Learn how your documents stay private while powering your AI assistant.
+        </p>
+      </div>
+
+      <div id="steps-container" style="position:relative; padding-left:10px;">
+        <!-- Injected by how.js -->
+      </div>
+
+      <div style="margin-top:32px;">
+        <button onclick="window.location.href='index.html'" class="primary-btn"
+          style="width:100%; justify-content:center; padding:14px;">
+          Get Started
+        </button>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Nav Injection -->
+  <script type="module">
+    import { mountNav } from './nav.js'
+    mountNav('how')
+  </script>
+
+  <script type="module" src="how.js"></script>
+</body>
+
+</html>
