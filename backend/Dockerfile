@@ -1,20 +1,16 @@
-# Use Node.js LTS (Long Term Support)
+# Use Node.js LTS
 FROM node:20-slim
 
-# Create and change to the app directory
+# Use a consistent app dir matching common Node containers
 WORKDIR /usr/src/app
 
-# Copy backend package.json and package-lock.json from the backend directory
-COPY backend/package*.json ./
+# Copy backend source (build context should be the `backend` folder)
+COPY . .
 
 # Install dependencies
-RUN npm install
+RUN npm install --production
 
-# Copy the rest of the backend application code
-COPY backend/ .
-
-# Expose the port the app runs on
 EXPOSE 3001
 
-# Command to run the application
-CMD [ "node", "server.js" ]
+# Start the server
+CMD ["node", "server.js"]
