@@ -129,7 +129,7 @@ if (fs.existsSync(frontendDir)) {
 }
 
 // Catch-all to serve index.html for any unknown routes (SPA style)
-app.get("*", (req, res) => {
+app.get(/.*/, (req, res) => {
   const indexPath = path.join(frontendDir, "index.html");
   if (fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
