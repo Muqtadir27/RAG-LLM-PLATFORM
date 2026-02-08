@@ -7,4 +7,3 @@
     "postinstall": "cd backend && npm install"
   }
 }
-{}
