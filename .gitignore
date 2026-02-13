@@ -21,6 +21,7 @@ logs/
 
 # Docker
 docker-compose.override.yml
+.dockerignore
 
 # OS files
 *.tmp
@@ -41,3 +42,9 @@ backend/node_modules/
 
 # Keep uploads in repo (do not ignore) — remove this section if you want to exclude large files
 # uploads/
+
+# Local SSH keys
+id_rsa_test
+id_rsa_test.pub
+id_ed25519_rag
+id_ed25519_rag.pub

@@ -1,23 +1,30 @@
 # Use Node.js LTS
 FROM node:20-slim
 
-# Use a consistent app dir matching common Node containers
+# Set working directory to /app
 WORKDIR /usr/src/app
 
-# Copy backend dependencies first for caching
-COPY backend/package*.json ./
+# Copy backend package files first (to cache dependencies)
+# We copy them into a 'backend' directory inside the container
+COPY backend/package*.json ./backend/
 
-# Install dependencies
+# Install dependencies inside the backend directory
+WORKDIR /usr/src/app/backend
 RUN npm install --production
 
-# Copy backend source
-COPY backend/ .
+# Move back to root context to copy source code
+WORKDIR /usr/src/app
 
-# Copy frontend source (so server.js can serve it from ../frontend)
-COPY frontend/ ../frontend/
+# Copy the entire backend and frontend directories
+# This preserves the structure:
+# /usr/src/app/backend
+# /usr/src/app/frontend
+COPY backend/ ./backend/
+COPY frontend/ ./frontend/
 
 # Expose port
 EXPOSE 3001
 
-# Start the server
+# Start the server from the backend directory
+WORKDIR /usr/src/app/backend
 CMD ["node", "server.js"]
