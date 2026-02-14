@@ -30,7 +30,12 @@ const upload = multer({
 ===================== */
 async function bootstrap() {
   console.log("📚 Bootstrap started...");
-  // ingest() is explicitly disabled
+
+  // Log detected environment variables (for debugging)
+  console.log("🛠️  Environment Check:");
+  console.log(`- PORT: ${process.env.PORT || 'Default (3001)'}`);
+  console.log(`- HF_TOKEN: ${process.env.HF_TOKEN ? '✅ Present' : '❌ Missing'}`);
+  console.log(`- GROQ_API_KEY: ${process.env.GROQ_API_KEY ? '✅ Present' : '❌ Missing'}`);
 
   const dataDir = "./data";
   if (fs.existsSync(dataDir)) {
@@ -85,22 +90,31 @@ app.post("/query", async (req, res) => {
 app.post("/upload", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
+      console.error("❌ Upload failed: No file uploaded");
       return res.status(400).json({ error: "No file uploaded" });
     }
 
+    console.log(`📤 Upload received: ${req.file.originalname} (${req.file.size} bytes)`);
+
     if (!req.file.originalname.endsWith(".pdf")) {
+      console.error("❌ Upload failed: Not a PDF");
       return res.status(400).json({ error: "Only PDFs are supported" });
     }
 
+    console.log(`⚙️  Starting ingestion for ${req.file.originalname}...`);
     await ingestPdf(req.file.path, req.file.originalname);
+    console.log(`✅ Ingestion successful: ${req.file.originalname}`);
 
     res.json({
       success: true,
       filename: req.file.originalname
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "PDF ingestion failed" });
+    console.error("🔥 PDF Ingestion Error Details:", err);
+    res.status(500).json({
+      error: "PDF ingestion failed",
+      message: err.message
+    });
   }
 });
 
