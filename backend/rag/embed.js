@@ -8,7 +8,7 @@ export async function embedText(text) {
     console.log("🤗 Generating embedding via Hugging Face...");
     try {
       const response = await fetch(
-        "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2",
+        "https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2",
         {
           headers: { Authorization: `Bearer ${hfToken}` },
           method: "POST",
