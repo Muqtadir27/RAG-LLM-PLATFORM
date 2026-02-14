@@ -66,7 +66,8 @@ app.post("/query", async (req, res) => {
     const retrievedDocs = await retrieveRelevantDocs(question, 3);
     console.log(`📄 Retrieved ${retrievedDocs.length} snippets.`);
 
-    console.log(`🤖 Generating answer via Ollama...`);
+    const provider = process.env.GROQ_API_KEY ? "Groq API" : "Ollama";
+    console.log(`🤖 Generating answer via ${provider}...`);
     const answer = await generate(retrievedDocs, question);
     console.log(`✅ Generation complete.`);
 
@@ -136,10 +137,17 @@ app.get("/health", (req, res) => {
    STATIC FRONTEND SERVING
 ===================== */
 const __dirname = path.resolve();
-const frontendDir = path.join(__dirname, "../frontend");
+// If run from backend/, the root is ../. If run from root, frontend is ./frontend
+let frontendDir = path.join(__dirname, "frontend");
+if (!fs.existsSync(frontendDir)) {
+  frontendDir = path.join(__dirname, "../frontend");
+}
 
 if (fs.existsSync(frontendDir)) {
+  console.log(`🌐 Serving frontend from: ${frontendDir}`);
   app.use(express.static(frontendDir));
+} else {
+  console.warn("⚠️ Frontend directory not found. Static serving disabled.");
 }
 
 // Catch-all to serve index.html for any unknown routes (SPA style)
