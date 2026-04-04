@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Database & uploads
+backend/database/
+backend/uploads/
+*.db
+*.sqlite
+
+# Node
+node_modules/
+.next/
+out/
+npm-debug.log*
+
+# SSH Keys (never commit these)
+id_rsa*
+*.pem
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Logs
+*.log
+out.txt
+logs/
