@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  # RAG Backend
+  backend:
+    build: 
+      context: ./backend
+    ports:
+      - "3001:3001"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    volumes:
+      - ./backend/uploads:/usr/src/app/uploads
+    depends_on:
+      - ollama
+
+  # Reverse Proxy (serving frontend + proxying API)
+  frontend:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+
+  # Ollama Service
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  ollama_data:

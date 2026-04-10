@@ -1,0 +1,9 @@
+{
+  "name": "rag-llm-platform",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "cd backend && npm start",
+    "postinstall": "cd backend && npm install"
+  }
+}

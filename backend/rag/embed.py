@@ -1,24 +1,26 @@
 import chromadb
 from chromadb.utils import embedding_functions
 import os
+from pathlib import Path
 
 
-CHROMA_DIR = os.getenv("CHROMA_DIR", "backend/database/chroma")
-
-# Use sentence-transformers for free local embeddings
-# No API key needed for embeddings
 embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-    model_name="all-MiniLM-L6-v2"  # Fast, good quality, runs on CPU
+    model_name="all-MiniLM-L6-v2"
 )
 
 
 def get_chroma_client():
-    """Get persistent ChromaDB client."""
-    return chromadb.PersistentClient(path=CHROMA_DIR)
+    chroma_dir = os.getenv(
+        "CHROMA_DIR",
+        "C:/Users/DELL/OneDrive/Documents/Rafay/Projects/RAG-v2/backend/database/chroma"
+    )
+    chroma_path = Path(chroma_dir).resolve()
+    chroma_path.mkdir(parents=True, exist_ok=True)
+    print(f"[ChromaDB] Saving to: {chroma_path}")
+    return chromadb.PersistentClient(path=str(chroma_path))
 
 
 def get_collection():
-    """Get or create the main documents collection."""
     client = get_chroma_client()
     return client.get_or_create_collection(
         name="documents",
@@ -28,28 +30,11 @@ def get_collection():
 
 
 def embed_and_store(chunks: list[str], doc_id: str, filename: str):
-    """
-    Embed text chunks and store in ChromaDB with metadata.
-    This is PERSISTENT - survives server restarts (unlike your old version).
-    """
     collection = get_collection()
-
-    # Create unique IDs for each chunk
     ids = [f"{doc_id}_chunk_{i}" for i in range(len(chunks))]
-
-    # Metadata for each chunk
     metadatas = [
-        {
-            "doc_id": doc_id,
-            "filename": filename,
-            "chunk_index": i
-        }
+        {"doc_id": doc_id, "filename": filename, "chunk_index": i}
         for i in range(len(chunks))
     ]
-
-    # Store in ChromaDB (auto-embeds using sentence-transformers)
-    collection.add(
-        documents=chunks,
-        ids=ids,
-        metadatas=metadatas
-    )
+    collection.add(documents=chunks, ids=ids, metadatas=metadatas)
+    print(f"[ChromaDB] Stored {len(chunks)} chunks for: {filename}")

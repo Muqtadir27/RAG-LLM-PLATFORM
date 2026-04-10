@@ -4,20 +4,27 @@ from rag.embed import get_collection
 def retrieve_chunks(
     question: str,
     document_id: str | None = None,
-    top_k: int = 5
+    top_k: int = 8
 ) -> tuple[list[str], list[str]]:
     """
-    Find most relevant chunks for a question using vector similarity.
-    Returns (chunks, sources).
+    Find the most relevant chunks for a question.
+    top_k=8 gives more context for better answers.
     """
     collection = get_collection()
 
-    # Filter by specific document if provided
+    # Check total docs in collection
+    total = collection.count()
+    if total == 0:
+        return [], []
+
+    # Use smaller top_k if collection has fewer items
+    actual_k = min(top_k, total)
+
     where = {"doc_id": document_id} if document_id else None
 
     results = collection.query(
         query_texts=[question],
-        n_results=top_k,
+        n_results=actual_k,
         where=where,
         include=["documents", "metadatas", "distances"]
     )
@@ -25,7 +32,6 @@ def retrieve_chunks(
     chunks = results["documents"][0] if results["documents"] else []
     metadatas = results["metadatas"][0] if results["metadatas"] else []
 
-    # Build source references
     sources = [
         f"{m['filename']} (chunk {m['chunk_index']})"
         for m in metadatas
@@ -35,11 +41,10 @@ def retrieve_chunks(
 
 
 def list_all_documents() -> list[dict]:
-    """List all unique documents stored in ChromaDB."""
+    """List all unique documents in ChromaDB."""
     collection = get_collection()
     results = collection.get(include=["metadatas"])
 
-    # Deduplicate by doc_id
     seen = {}
     for meta in results["metadatas"]:
         doc_id = meta["doc_id"]
@@ -53,7 +58,7 @@ def list_all_documents() -> list[dict]:
 
 
 def delete_document_chunks(document_id: str) -> bool:
-    """Delete all chunks belonging to a document."""
+    """Delete all chunks for a document."""
     collection = get_collection()
 
     results = collection.get(

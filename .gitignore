@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Python
 __pycache__/
 *.py[cod]
@@ -47,3 +48,55 @@ desktop.ini
 *.log
 out.txt
 logs/
+=======
+# Node
+node_modules/
+npm-debug.log*
+package-lock.json
+yarn.lock
+
+# Environment
+.env
+.env.*
+
+# VSCode
+.vscode/
+
+# Mac / system
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# OS files
+*.tmp
+
+# Ignore local build artifacts
+dist/
+build/
+
+# Ignore Python envs
+venv/
+.envrc
+
+# Ignore JetBrains
+.idea/
+
+# Ignore installed dependencies for backend (if present)
+backend/node_modules/
+
+# Keep uploads in repo (do not ignore) — remove this section if you want to exclude large files
+# uploads/
+
+# Local SSH keys
+id_rsa_test
+id_rsa_test.pub
+id_ed25519_rag
+id_ed25519_rag.pub
+>>>>>>> 1661d96e2dd64330c14b4e55c47f41df91658d2b
