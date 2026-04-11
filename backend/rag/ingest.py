@@ -3,7 +3,6 @@ from rag.embed import embed_and_store
 
 
 def extract_text_from_pdf(file_path: str) -> str:
-    """Extract all text from a PDF file."""
     text = ""
     with open(file_path, "rb") as f:
         reader = PyPDF2.PdfReader(f)
@@ -14,12 +13,7 @@ def extract_text_from_pdf(file_path: str) -> str:
     return text
 
 
-def chunk_text(text: str, chunk_size: int = 800, overlap: int = 200) -> list[str]:
-    """
-    Split text into overlapping chunks.
-    Larger chunks = more context per retrieval.
-    More overlap = less chance of cutting important info.
-    """
+def chunk_text(text: str, chunk_size: int = 400, overlap: int = 50) -> list[str]:
     words = text.split()
     chunks = []
     start = 0
@@ -34,18 +28,13 @@ def chunk_text(text: str, chunk_size: int = 800, overlap: int = 200) -> list[str
     return chunks
 
 
-def ingest_pdf(file_path: str, doc_id: str, filename: str) -> int:
-    """
-    Full pipeline: PDF → text → chunks → embeddings → ChromaDB
-    Returns number of chunks stored.
-    """
+def ingest_pdf(file_path: str, doc_id: str, filename: str, session_id: str) -> int:
     text = extract_text_from_pdf(file_path)
 
     if not text.strip():
         raise ValueError(
             "Could not extract text from this PDF. "
-            "The file may be scanned or image-based. "
-            "Try a text-based PDF."
+            "The file may be scanned or image-based."
         )
 
     chunks = chunk_text(text)
@@ -53,6 +42,6 @@ def ingest_pdf(file_path: str, doc_id: str, filename: str) -> int:
     if not chunks:
         raise ValueError("No text chunks could be generated from this document.")
 
-    embed_and_store(chunks, doc_id, filename)
+    embed_and_store(chunks, doc_id, filename, session_id)
 
     return len(chunks)

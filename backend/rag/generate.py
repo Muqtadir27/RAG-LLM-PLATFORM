@@ -3,26 +3,8 @@ import os
 import httpx
 
 
-def get_client():
-    return OpenAI(
-        api_key=os.getenv("GLM_API_KEY", ""),
-        base_url=os.getenv("GLM_API_BASE", "https://api.groq.com/openai/v1/"),
-        timeout=60.0,
-        http_client=httpx.Client(
-            timeout=httpx.Timeout(
-                connect=30.0,
-                read=60.0,
-                write=30.0,
-                pool=10.0,
-            )
-        )
-    )
-
-
-def generate_answer(question: str, context_chunks: list[str]) -> str:
-    context = "\n\n---\n\n".join(context_chunks)
-
-    prompt = f"""You are an expert document analysis assistant. You have been given chunks of text extracted from one or more documents. Your job is to answer the user's question accurately and clearly based on the provided content.
+def build_prompt(question: str, context: str) -> str:
+    return f"""You are an expert document analysis assistant. You have been given chunks of text extracted from one or more documents. Your job is to answer the user's question accurately and clearly based on the provided content.
 
 DOCUMENT CONTENT:
 {context}
@@ -43,14 +25,33 @@ RULES:
 
 ANSWER:"""
 
+
+def generate_answer(question: str, context_chunks: list[str]) -> str:
+    api_key = os.getenv("GROQ_API_KEY", "").strip()
+    if not api_key:
+        return "⚠ No API key configured. Add GROQ_API_KEY to your .env file."
+
+    model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+    context = "\n\n---\n\n".join(context_chunks)
+    prompt = build_prompt(question, context)
+
+    client = OpenAI(
+        api_key=api_key,
+        base_url="https://api.groq.com/openai/v1/",
+        timeout=60.0,
+        http_client=httpx.Client(
+            timeout=httpx.Timeout(connect=15.0, read=60.0, write=15.0, pool=10.0)
+        )
+    )
+
     try:
-        client = get_client()
+        print(f"[AI] Calling Groq ({model})...")
         response = client.chat.completions.create(
-            model=os.getenv("GLM_MODEL", "llama-3.3-70b-versatile"),
+            model=model,
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a precise document analysis assistant. You only answer based on provided document content. You are thorough, clear, and always cite your sources within the document."
+                    "content": "You are a precise document analysis assistant. Answer only from the provided document content."
                 },
                 {
                     "role": "user",
@@ -60,15 +61,10 @@ ANSWER:"""
             temperature=0.1,
             max_tokens=2000,
         )
-        return response.choices[0].message.content
+        answer = response.choices[0].message.content
+        print("[AI] Groq responded successfully")
+        return answer
 
     except Exception as e:
-        error_str = str(e).lower()
-        if "timeout" in error_str:
-            return "⚠ Request timed out. Please try again in a moment."
-        elif "api key" in error_str or "auth" in error_str:
-            return "⚠ Invalid API key. Please check your .env file."
-        elif "rate limit" in error_str:
-            return "⚠ Rate limit reached. Please wait 30 seconds and try again."
-        else:
-            return f"⚠ Error: {str(e)}"
+        print(f"[AI] Groq failed: {e}")
+        return f"⚠ Groq error: {str(e)}"

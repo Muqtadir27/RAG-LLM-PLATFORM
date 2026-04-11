@@ -1,37 +1,32 @@
 version: '3.8'
-
 services:
-  # RAG Backend
   backend:
-    build: 
-      context: ./backend
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
     ports:
-      - "3001:3001"
+      - "8000:8000"
     environment:
-      - OLLAMA_HOST=http://ollama:11434
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL}
+      - UPLOAD_DIR=/app/uploads
+      - CHROMA_DIR=/app/database/chroma
+      - FRONTEND_URL=${FRONTEND_URL}
     volumes:
-      - ./backend/uploads:/usr/src/app/uploads
-    depends_on:
-      - ollama
+      - uploads:/app/uploads
+      - chroma:/app/database/chroma
 
-  # Reverse Proxy (serving frontend + proxying API)
   frontend:
-    image: nginx:alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
     ports:
-      - "80:80"
-    volumes:
-      - ./frontend:/usr/share/nginx/html:ro
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
     depends_on:
       - backend
 
-  # Ollama Service
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-
 volumes:
-  ollama_data:
+  uploads:
+  chroma:
