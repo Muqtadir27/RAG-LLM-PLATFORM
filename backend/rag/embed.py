@@ -2,7 +2,7 @@ import chromadb
 from chromadb.utils import embedding_functions
 import os
 from pathlib import Path
-
+from datetime import datetime
 
 embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
     model_name="all-MiniLM-L6-v2"
@@ -29,12 +29,19 @@ def get_collection():
     )
 
 
-def embed_and_store(chunks: list[str], doc_id: str, filename: str):
+def embed_and_store(chunks: list[str], doc_id: str, filename: str, session_id: str):
     collection = get_collection()
+
     ids = [f"{doc_id}_chunk_{i}" for i in range(len(chunks))]
     metadatas = [
-        {"doc_id": doc_id, "filename": filename, "chunk_index": i}
+        {
+            "doc_id": doc_id,
+            "filename": filename,
+            "chunk_index": i,
+            "session_id": session_id,                    # ← isolates per user
+            "created_at": datetime.utcnow().isoformat()  # ← for cleanup
+        }
         for i in range(len(chunks))
     ]
     collection.add(documents=chunks, ids=ids, metadatas=metadatas)
-    print(f"[ChromaDB] Stored {len(chunks)} chunks for: {filename}")
+    print(f"[ChromaDB] Stored {len(chunks)} chunks for: {filename} (session: {session_id[:8]}...)")

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Sidebar from './components/Sidebar'
 import Chat from './components/Chat'
+import EvalPanel from './components/EvalPanel'
 
 export interface Document {
   document_id: string
@@ -15,13 +16,50 @@ export interface Message {
   sources?: string[]
 }
 
+type ActiveTab = 'query' | 'eval'
+
+const MESSAGES_KEY = (docId: string | null) =>
+  `rag_nexus_messages_${docId || 'all'}`
+
 export default function Home() {
   const [documents, setDocuments] = useState<Document[]>([])
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
+  const [activeTab, setActiveTab] = useState<ActiveTab>('query')
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  // Particles — runs only on client, doesn't affect layout
+  // Load messages from localStorage when selected doc changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const key = MESSAGES_KEY(selectedDoc?.document_id || null)
+    const saved = localStorage.getItem(key)
+    if (saved) {
+      try { setMessages(JSON.parse(saved)) } catch { setMessages([]) }
+    } else {
+      setMessages([])
+    }
+  }, [selectedDoc?.document_id])
+
+  // Save messages to localStorage whenever they change
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (messages.length === 0) return
+    const key = MESSAGES_KEY(selectedDoc?.document_id || null)
+    localStorage.setItem(key, JSON.stringify(messages))
+  }, [messages, selectedDoc?.document_id])
+
+  // Expose a setter that also persists
+  const setAndPersistMessages = (newMessages: Message[]) => {
+    setMessages(newMessages)
+    if (typeof window === 'undefined') return
+    const key = MESSAGES_KEY(selectedDoc?.document_id || null)
+    if (newMessages.length === 0) {
+      localStorage.removeItem(key)
+    } else {
+      localStorage.setItem(key, JSON.stringify(newMessages))
+    }
+  }
+
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -80,45 +118,25 @@ export default function Home() {
   }, [])
 
   return (
-    <div style={{
-      width: '100%',
-      height: '100%',
-      display: 'flex',
-      /* overflow: 'hidden', */
-      position: 'relative',
-      background: '#020408',
-    }}>
-      {/* Canvas — absolutely positioned behind everything, no layout impact */}
-      <canvas
-        ref={canvasRef}
-        style={{
-          position: 'absolute',
-          top: 0, left: 0,
-          width: '100%',
-          height: '100%',
-          pointerEvents: 'none',
-          zIndex: 0,
-        }}
-      />
-
-      {/* Glow orbs — decorative only */}
+    <div style={{ width: '100%', height: '100%', display: 'flex', position: 'relative', background: '#020408' }}>
+      <canvas ref={canvasRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 0 }} />
       <div style={{ position: 'absolute', top: '-15%', left: '-8%', width: 500, height: 500, borderRadius: '50%', background: 'radial-gradient(circle, rgba(0,212,255,0.05) 0%, transparent 70%)', pointerEvents: 'none', zIndex: 0 }} />
       <div style={{ position: 'absolute', bottom: '-15%', right: '-8%', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(120,0,255,0.05) 0%, transparent 70%)', pointerEvents: 'none', zIndex: 0 }} />
 
-      {/* Main UI — always rendered, no conditional mount */}
       <div style={{ position: 'relative', zIndex: 1, display: 'flex', width: '100%', height: '100%', overflow: 'hidden' }}>
         <Sidebar
           documents={documents}
           setDocuments={setDocuments}
           selectedDoc={selectedDoc}
           setSelectedDoc={setSelectedDoc}
-          setMessages={setMessages}
+          setMessages={setAndPersistMessages}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
         />
-        <Chat
-          selectedDoc={selectedDoc}
-          messages={messages}
-          setMessages={setMessages}
-        />
+        {activeTab === 'query'
+          ? <Chat selectedDoc={selectedDoc} messages={messages} setMessages={setAndPersistMessages} />
+          : <EvalPanel selectedDoc={selectedDoc} messages={messages} />
+        }
       </div>
     </div>
   )
