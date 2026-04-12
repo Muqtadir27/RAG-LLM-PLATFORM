@@ -1,151 +1,212 @@
-# RAG LLM Platform
+# RAG.NEXUS 🧠
 
-A Retrieval-Augmented Generation (RAG) system built with Node.js, Express, and vanilla JavaScript. This platform allows users to upload PDF documents, ask questions about their content, and receive AI-generated answers based on the retrieved information.
+> A production-grade Retrieval-Augmented Generation (RAG) platform with a cyberpunk-inspired UI. Upload PDFs, ask questions, and get AI-powered answers grounded in your documents — with built-in evaluation scoring.
 
-## 🚀 Deployment Options
+![RAG Nexus](https://img.shields.io/badge/RAG-Nexus-00ffcc?style=for-the-badge)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi)
+![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js)
+![Qdrant](https://img.shields.io/badge/Qdrant-Cloud-dc244c?style=for-the-badge)
 
-### Railway Deployment (Recommended)
+---
 
-This project is configured for easy deployment on Railway.app:
+## ✨ Features
 
-1. **Connect to Railway**
-   - Push your code to GitHub
-   - Create a new project on Railway
-   - Connect your GitHub repository
+- 📄 **PDF Ingestion** — Upload and index PDFs into a vector database
+- 🔍 **Semantic Search** — Retrieve relevant chunks using cosine similarity
+- 🤖 **AI-Powered Answers** — Generate responses grounded in your documents via Groq LLM
+- 📊 **Eval Pipeline** — Built-in evaluation scoring: Faithfulness, Relevance, Hallucination Guard
+- 🔐 **Session Isolation** — Each user session has isolated document access
+- 🗑️ **Document Management** — List and delete uploaded documents per session
+- ⚡ **Fast & Lightweight** — No local ML models, fully API-driven
 
-2. **Configure Environment Variables** (Optional)
-   - `GROQ_API_KEY` - For cloud-based LLM processing (faster)
-   - `HF_TOKEN` - For Hugging Face embeddings (optional)
-   - `OLLAMA_HOST` - Custom Ollama endpoint (default: http://localhost:11434)
-
-3. **Deploy**
-   - Railway will automatically detect the `railway.json` configuration
-   - The application will build using the Dockerfile in `backend/`
-   - Your RAG platform will be live at your Railway URL
-
-> **Note**: By default, the application uses Ollama for local processing. For production use, we recommend setting up `GROQ_API_KEY` for better performance.
-
-### Local Development
-
-#### Prerequisites
-
-- Node.js (v18+)
-- Ollama (for local LLM processing)
-
-#### Setup
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd rag-llm-platform
-   ```
-
-2. **Install backend dependencies**
-   ```bash
-   cd backend
-   npm install
-   ```
-
-3. **Start Ollama** (separate terminal)
-   ```bash
-   ollama serve
-   ```
-
-4. **Pull required models**
-   ```bash
-   ollama pull phi3
-   ollama pull nomic-embed-text
-   ```
-
-5. **Start the backend server**
-   ```bash
-   npm start
-   ```
-
-6. **Access the application**
-   Open `http://localhost:3001` in your browser
+---
 
 ## 🏗️ Architecture
 
 ```
-├── backend/          # Node.js Express server
-│   ├── rag/          # Core RAG modules
-│   │   ├── embed.js    # Text embedding
-│   │   ├── generate.js # Answer generation
-│   │   ├── index.js    # Document management
-│   │   ├── ingest.js   # Document ingestion
-│   │   ├── ingestPdf.js # PDF processing
-│   │   ├── retrieve.js # Document retrieval
-│   │   └── similarity.js # Similarity scoring
-│   ├── uploads/      # Uploaded PDF files
-│   ├── server.js     # Main server file
-│   └── package.json
-├── frontend/         # Static HTML/CSS/JS frontend
-│   ├── index.html    # Main application page
-│   ├── upload.html   # Document upload page
-│   ├── explore.html  # Document explorer
-│   ├── how.html      # How it works page
-│   ├── style.css     # Styling
-│   └── JavaScript files
-├── docker-compose.yml # Docker orchestration
-├── railway.json      # Railway deployment config
-└── nginx.conf        # Nginx reverse proxy config
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│   Next.js 16    │────▶│   FastAPI        │────▶│  Qdrant Cloud   │
+│   Frontend      │     │   Backend        │     │  Vector DB      │
+│   (Render)      │     │   (Render)       │     │  (Managed)      │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+                                 │
+                    ┌────────────┴────────────┐
+                    │                         │
+             ┌──────▼──────┐         ┌────────▼───────┐
+             │  Jina AI    │         │   Groq API     │
+             │  Embeddings │         │   LLM (GLM-4.7)│
+             └─────────────┘         └────────────────┘
 ```
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **Frontend** | Next.js 16, React 19, TailwindCSS 4, TypeScript |
+| **Backend** | FastAPI, Python 3.11, Uvicorn |
+| **Vector DB** | Qdrant Cloud (free tier) |
+| **Embeddings** | Jina AI `jina-embeddings-v2-base-en` (768-dim) |
+| **LLM** | Groq API |
+| **PDF Parsing** | PyPDF2 |
+| **Deployment** | Render (frontend + backend) |
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Python 3.11
+- Node.js 18+
+- API keys for: [Groq](https://console.groq.com), [Jina AI](https://jina.ai), [Qdrant Cloud](https://cloud.qdrant.io)
+
+### Backend Setup
+
+```bash
+# Clone the repo
+git clone https://github.com/Muqtadir27/RAG-LLM-PLATFORM.git
+cd RAG-LLM-PLATFORM/backend
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Create .env file
+cp .env.example .env
+# Fill in your API keys (see Environment Variables section)
+
+# Run the backend
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Frontend Setup
+
+```bash
+cd ../frontend
+
+# Install dependencies
+npm install
+
+# Create .env.local
+echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
+
+# Run the frontend
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## 🔑 Environment Variables
+
+### Backend (`.env`)
+
+| Variable | Description | Required |
+|---|---|---|
+| `GROQ_API_KEY` | Groq API key for LLM generation | ✅ |
+| `JINA_API_KEY` | Jina AI key for embeddings | ✅ |
+| `QDRANT_URL` | Qdrant Cloud cluster URL | ✅ |
+| `QDRANT_API_KEY` | Qdrant Cloud API key | ✅ |
+| `FRONTEND_URL` | Frontend URL for CORS | ✅ |
+| `UPLOAD_DIR` | Directory for uploaded PDFs | ❌ (default: `uploads/`) |
+| `CHROMA_DIR` | Legacy ChromaDB dir (unused) | ❌ |
+
+### Frontend (`.env.local`)
+
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_API_URL` | Backend API base URL |
+
+---
 
 ## 📡 API Endpoints
 
-- `POST /query` - Ask questions about documents
-- `POST /upload` - Upload PDF documents
-- `GET /documents` - List all processed documents
-- `GET /health` - Health check endpoint
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/health` | Health check |
+| `POST` | `/upload` | Upload and ingest a PDF |
+| `POST` | `/query` | Query documents with a question |
+| `GET` | `/documents` | List documents for a session |
+| `DELETE` | `/documents/{id}` | Delete a document |
 
-## ⚙️ How It Works
+All endpoints (except `/health`) require an `X-Session-Id` header for session isolation.
 
-1. **Document Ingestion**: PDF files are parsed and split into chunks
-2. **Embedding**: Text chunks are converted to vector embeddings using Ollama
-3. **Storage**: Documents and embeddings are stored in memory
-4. **Retrieval**: User questions are embedded and matched against stored documents
-5. **Generation**: Relevant document chunks are sent to LLM for answer generation
+---
 
-## 🔧 Configuration Options
+## 🧪 Eval Pipeline
 
-### Environment Variables
+RAG.NEXUS includes a built-in evaluation pipeline that scores answers on three dimensions:
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `PORT` | Server port | 3001 | No |
-| `GROQ_API_KEY` | Groq API key for cloud LLM | None | No (falls back to Ollama) |
-| `HF_TOKEN` | Hugging Face token for embeddings | None | No (falls back to Ollama) |
-| `OLLAMA_HOST` | Ollama service URL | http://localhost:11434 | No |
+- **Faithfulness** — Is the answer grounded in the retrieved context?
+- **Relevance** — Does the answer actually address the question?
+- **Hallucination Guard** — Does the answer contain fabricated information?
 
-### Processing Modes
+Each dimension is scored 0–100. An overall score of 70+ is considered a **PASS**.
 
-1. **Local Mode** (Default): Uses Ollama for both embeddings and generation
-2. **Hybrid Mode**: Uses Ollama for embeddings, Groq for generation (set `GROQ_API_KEY`)
-3. **Cloud Mode**: Uses Hugging Face for embeddings, Groq for generation (set both keys)
+---
 
-## 🛠️ Development
+## 📁 Project Structure
 
-### Backend Structure
+```
+RAG-LLM-PLATFORM/
+├── backend/
+│   ├── main.py              # FastAPI app + routes
+│   ├── eval_router.py       # Evaluation pipeline
+│   ├── requirements.txt
+│   └── rag/
+│       ├── embed.py         # Jina AI embeddings + Qdrant storage
+│       ├── retrieve.py      # Semantic search + document management
+│       ├── ingest.py        # PDF parsing + chunking
+│       └── generate.py      # Groq LLM answer generation
+├── frontend/
+│   ├── app/
+│   │   ├── page.tsx         # Main UI
+│   │   ├── layout.tsx
+│   │   ├── lib/
+│   │   │   ├── api.ts       # API client
+│   │   │   └── session.ts   # Session management
+│   │   └── components/      # UI components
+│   ├── package.json
+│   └── next.config.ts
+└── chroma/
+    └── Dockerfile           # Legacy ChromaDB service (deprecated)
+```
 
-- `server.js`: Main Express server
-- `rag/` directory contains core RAG functionality
-- `uploads/`: Temporary file storage
+---
 
-### Frontend Structure
+## ☁️ Deployment
 
-- `index.html`: Main application interface
-- `upload.html`: Document upload interface
-- `explore.html`: Document explorer
-- `how.html`: Documentation and instructions
+The platform is deployed on [Render](https://render.com):
 
-## 🤝 Contributing
+| Service | URL |
+|---|---|
+| Frontend | `https://rag-nexus-frontend.onrender.com` |
+| Backend | `https://rag-nexus-backend.onrender.com` |
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
+### Deploy Your Own
 
-## 📄 License
+1. Fork this repo
+2. Create two Web Services on Render (one for `frontend/`, one for `backend/`)
+3. Set environment variables as listed above
+4. Deploy!
 
-ISC
+---
+
+## 📝 License
+
+MIT License — feel free to use, modify, and distribute.
+
+---
+
+## 🙏 Acknowledgements
+
+- [Groq](https://groq.com) for blazing fast LLM inference
+- [Qdrant](https://qdrant.tech) for the vector database
+- [Jina AI](https://jina.ai) for free embeddings API
+- [Render](https://render.com) for hosting
