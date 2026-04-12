@@ -1,5 +1,4 @@
 import chromadb
-import chromadb.config
 from chromadb.utils.embedding_functions import HuggingFaceEmbeddingFunction
 import os
 from pathlib import Path
@@ -15,25 +14,16 @@ def get_chroma_client():
     chroma_host = os.getenv("CHROMA_HOST")
     if chroma_host:
         print(f"[ChromaDB] Connecting to remote: {chroma_host}")
-        client = chromadb.HttpClient(
-            host=chroma_host,
-            port=443,
-            ssl=True,
-            settings=chromadb.config.Settings(
-                chroma_api_impl="chromadb.api.fastapi.FastAPI",
-                anonymized_telemetry=False
-            )
+        # Use low-level HTTP client that skips tenant validation
+        import chromadb.config
+        settings = chromadb.config.Settings(
+            chroma_api_impl="chromadb.api.fastapi.FastAPI",
+            chroma_server_host=chroma_host,
+            chroma_server_http_port=443,
+            chroma_server_ssl_enabled=True,
+            anonymized_telemetry=False
         )
-        # Ensure default tenant and database exist
-        try:
-            client.get_tenant("default_tenant")
-        except Exception:
-            client.create_tenant("default_tenant")
-        try:
-            client.get_database("default_database", tenant="default_tenant")
-        except Exception:
-            client.create_database("default_database", tenant="default_tenant")
-        return client
+        return chromadb.Client(settings)
     else:
         chroma_dir = os.getenv("CHROMA_DIR", "/tmp/chroma")
         chroma_path = Path(chroma_dir).resolve()
