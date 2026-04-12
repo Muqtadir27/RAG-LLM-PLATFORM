@@ -1,4 +1,4 @@
-from qdrant_client.models import Filter, FieldCondition, MatchValue, AndCondition
+from qdrant_client.models import Filter, FieldCondition, MatchValue
 from rag.embed import get_embedding, get_qdrant_client, ensure_collection, COLLECTION_NAME
 from datetime import datetime, timedelta
 
