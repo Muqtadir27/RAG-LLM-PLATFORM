@@ -1,19 +1,17 @@
 import chromadb
-from chromadb.utils import embedding_functions
+from chromadb.utils.embedding_functions import HuggingFaceEmbeddingFunction
 import os
 from pathlib import Path
 from datetime import datetime
 
-embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-    model_name="all-MiniLM-L6-v2"
+embedding_fn = HuggingFaceEmbeddingFunction(
+    api_key=os.getenv("HF_API_KEY"),
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
 
 def get_chroma_client():
-    chroma_dir = os.getenv(
-        "CHROMA_DIR",
-        "C:/Users/DELL/OneDrive/Documents/Rafay/Projects/RAG-v2/backend/database/chroma"
-    )
+    chroma_dir = os.getenv("CHROMA_DIR", "/tmp/chroma")
     chroma_path = Path(chroma_dir).resolve()
     chroma_path.mkdir(parents=True, exist_ok=True)
     print(f"[ChromaDB] Saving to: {chroma_path}")
@@ -38,8 +36,8 @@ def embed_and_store(chunks: list[str], doc_id: str, filename: str, session_id: s
             "doc_id": doc_id,
             "filename": filename,
             "chunk_index": i,
-            "session_id": session_id,                    # ← isolates per user
-            "created_at": datetime.utcnow().isoformat()  # ← for cleanup
+            "session_id": session_id,
+            "created_at": datetime.utcnow().isoformat()
         }
         for i in range(len(chunks))
     ]
