@@ -1,59 +1,61 @@
-import chromadb
-from chromadb.utils.embedding_functions import HuggingFaceEmbeddingFunction
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams, PointStruct
 import os
-from pathlib import Path
+import requests
 from datetime import datetime
+import uuid
 
-embedding_fn = HuggingFaceEmbeddingFunction(
-    api_key=os.getenv("HF_API_KEY"),
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
-
-
-def get_chroma_client():
-    chroma_host = os.getenv("CHROMA_HOST")
-    if chroma_host:
-        print(f"[ChromaDB] Connecting to remote: {chroma_host}")
-        # Use low-level HTTP client that skips tenant validation
-        import chromadb.config
-        settings = chromadb.config.Settings(
-            chroma_api_impl="chromadb.api.fastapi.FastAPI",
-            chroma_server_host=chroma_host,
-            chroma_server_http_port=443,
-            chroma_server_ssl_enabled=True,
-            anonymized_telemetry=False
-        )
-        return chromadb.Client(settings)
-    else:
-        chroma_dir = os.getenv("CHROMA_DIR", "/tmp/chroma")
-        chroma_path = Path(chroma_dir).resolve()
-        chroma_path.mkdir(parents=True, exist_ok=True)
-        print(f"[ChromaDB] Saving to: {chroma_path}")
-        return chromadb.PersistentClient(path=str(chroma_path))
+COLLECTION_NAME = "documents"
+VECTOR_SIZE = 384  # all-MiniLM-L6-v2 output size
+HF_API_URL = "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2"
 
 
-def get_collection():
-    client = get_chroma_client()
-    return client.get_or_create_collection(
-        name="documents",
-        embedding_function=embedding_fn,
-        metadata={"hnsw:space": "cosine"}
+def get_embedding(texts: list[str]) -> list[list[float]]:
+    headers = {"Authorization": f"Bearer {os.getenv('HF_API_KEY')}"}
+    response = requests.post(HF_API_URL, headers=headers, json={"inputs": texts})
+    response.raise_for_status()
+    return response.json()
+
+
+def get_qdrant_client() -> QdrantClient:
+    return QdrantClient(
+        url=os.getenv("QDRANT_URL"),
+        api_key=os.getenv("QDRANT_API_KEY"),
     )
 
 
-def embed_and_store(chunks: list[str], doc_id: str, filename: str, session_id: str):
-    collection = get_collection()
+def ensure_collection():
+    client = get_qdrant_client()
+    existing = [c.name for c in client.get_collections().collections]
+    if COLLECTION_NAME not in existing:
+        client.create_collection(
+            collection_name=COLLECTION_NAME,
+            vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
+        )
+        print(f"[Qdrant] Created collection: {COLLECTION_NAME}")
 
-    ids = [f"{doc_id}_chunk_{i}" for i in range(len(chunks))]
-    metadatas = [
-        {
-            "doc_id": doc_id,
-            "filename": filename,
-            "chunk_index": i,
-            "session_id": session_id,
-            "created_at": datetime.utcnow().isoformat()
-        }
+
+def embed_and_store(chunks: list[str], doc_id: str, filename: str, session_id: str):
+    ensure_collection()
+    client = get_qdrant_client()
+
+    embeddings = get_embedding(chunks)
+
+    points = [
+        PointStruct(
+            id=str(uuid.uuid4()),
+            vector=embeddings[i],
+            payload={
+                "doc_id": doc_id,
+                "filename": filename,
+                "chunk_index": i,
+                "session_id": session_id,
+                "text": chunks[i],
+                "created_at": datetime.utcnow().isoformat()
+            }
+        )
         for i in range(len(chunks))
     ]
-    collection.add(documents=chunks, ids=ids, metadatas=metadatas)
-    print(f"[ChromaDB] Stored {len(chunks)} chunks for: {filename} (session: {session_id[:8]}...)")
+
+    client.upsert(collection_name=COLLECTION_NAME, points=points)
+    print(f"[Qdrant] Stored {len(chunks)} chunks for: {filename} (session: {session_id[:8]}...)")
