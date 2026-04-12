@@ -15,7 +15,7 @@ def get_chroma_client():
     chroma_host = os.getenv("CHROMA_HOST")
     if chroma_host:
         print(f"[ChromaDB] Connecting to remote: {chroma_host}")
-        return chromadb.HttpClient(
+        client = chromadb.HttpClient(
             host=chroma_host,
             port=443,
             ssl=True,
@@ -24,6 +24,16 @@ def get_chroma_client():
                 anonymized_telemetry=False
             )
         )
+        # Ensure default tenant and database exist
+        try:
+            client.get_tenant("default_tenant")
+        except Exception:
+            client.create_tenant("default_tenant")
+        try:
+            client.get_database("default_database", tenant="default_tenant")
+        except Exception:
+            client.create_database("default_database", tenant="default_tenant")
+        return client
     else:
         chroma_dir = os.getenv("CHROMA_DIR", "/tmp/chroma")
         chroma_path = Path(chroma_dir).resolve()
