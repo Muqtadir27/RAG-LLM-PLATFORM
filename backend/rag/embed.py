@@ -7,14 +7,18 @@ import uuid
 
 COLLECTION_NAME = "documents"
 VECTOR_SIZE = 384  # all-MiniLM-L6-v2 output size
-HF_API_URL = "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2"
+HF_API_URL = "https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2"
 
 
 def get_embedding(texts: list[str]) -> list[list[float]]:
     headers = {"Authorization": f"Bearer {os.getenv('HF_API_KEY')}"}
     response = requests.post(HF_API_URL, headers=headers, json={"inputs": texts})
     response.raise_for_status()
-    return response.json()
+    result = response.json()
+    # HF models endpoint returns nested list for batch — flatten if needed
+    if isinstance(result[0][0], list):
+        result = [item[0] for item in result]
+    return result
 
 
 def get_qdrant_client() -> QdrantClient:
