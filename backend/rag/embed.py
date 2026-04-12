@@ -1,24 +1,30 @@
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
+from qdrant_client.models import Distance, VectorParams, PointStruct, PayloadSchemaType
 import os
 import requests
 from datetime import datetime
 import uuid
 
 COLLECTION_NAME = "documents"
-VECTOR_SIZE = 384  # all-MiniLM-L6-v2 output size
-HF_API_URL = "https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2"
+VECTOR_SIZE = 768  # jina-embeddings-v2-base-en output size
+JINA_API_URL = "https://api.jina.ai/v1/embeddings"
 
 
 def get_embedding(texts: list[str]) -> list[list[float]]:
-    headers = {"Authorization": f"Bearer {os.getenv('HF_API_KEY')}"}
-    response = requests.post(HF_API_URL, headers=headers, json={"inputs": texts})
+    headers = {
+        "Authorization": f"Bearer {os.getenv('JINA_API_KEY')}",
+        "Content-Type": "application/json"
+    }
+    response = requests.post(
+        JINA_API_URL,
+        headers=headers,
+        json={
+            "input": texts,
+            "model": "jina-embeddings-v2-base-en"
+        }
+    )
     response.raise_for_status()
-    result = response.json()
-    # HF models endpoint returns nested list for batch — flatten if needed
-    if isinstance(result[0][0], list):
-        result = [item[0] for item in result]
-    return result
+    return [item["embedding"] for item in response.json()["data"]]
 
 
 def get_qdrant_client() -> QdrantClient:
@@ -36,7 +42,18 @@ def ensure_collection():
             collection_name=COLLECTION_NAME,
             vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
         )
-        print(f"[Qdrant] Created collection: {COLLECTION_NAME}")
+        # Create indexes for filtered search
+        client.create_payload_index(
+            collection_name=COLLECTION_NAME,
+            field_name="session_id",
+            field_schema=PayloadSchemaType.KEYWORD
+        )
+        client.create_payload_index(
+            collection_name=COLLECTION_NAME,
+            field_name="doc_id",
+            field_schema=PayloadSchemaType.KEYWORD
+        )
+        print(f"[Qdrant] Created collection and indexes: {COLLECTION_NAME}")
 
 
 def embed_and_store(chunks: list[str], doc_id: str, filename: str, session_id: str):
