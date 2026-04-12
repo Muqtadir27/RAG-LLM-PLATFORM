@@ -1,4 +1,5 @@
 import chromadb
+import chromadb.config
 from chromadb.utils.embedding_functions import HuggingFaceEmbeddingFunction
 import os
 from pathlib import Path
@@ -11,11 +12,24 @@ embedding_fn = HuggingFaceEmbeddingFunction(
 
 
 def get_chroma_client():
-    chroma_dir = os.getenv("CHROMA_DIR", "/tmp/chroma")
-    chroma_path = Path(chroma_dir).resolve()
-    chroma_path.mkdir(parents=True, exist_ok=True)
-    print(f"[ChromaDB] Saving to: {chroma_path}")
-    return chromadb.PersistentClient(path=str(chroma_path))
+    chroma_host = os.getenv("CHROMA_HOST")
+    if chroma_host:
+        print(f"[ChromaDB] Connecting to remote: {chroma_host}")
+        return chromadb.HttpClient(
+            host=chroma_host,
+            port=443,
+            ssl=True,
+            settings=chromadb.config.Settings(
+                chroma_api_impl="chromadb.api.fastapi.FastAPI",
+                anonymized_telemetry=False
+            )
+        )
+    else:
+        chroma_dir = os.getenv("CHROMA_DIR", "/tmp/chroma")
+        chroma_path = Path(chroma_dir).resolve()
+        chroma_path.mkdir(parents=True, exist_ok=True)
+        print(f"[ChromaDB] Saving to: {chroma_path}")
+        return chromadb.PersistentClient(path=str(chroma_path))
 
 
 def get_collection():
