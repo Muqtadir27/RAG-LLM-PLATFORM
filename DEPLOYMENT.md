@@ -1,92 +1,74 @@
-# Railway Deployment Guide
+# Deployment Guide
+
+This project deploys as two separate services: a Python/FastAPI backend and a Next.js frontend, both built from the Dockerfiles in this repo.
 
 ## Prerequisites
-- GitHub account
-- Railway.app account (free tier available)
 
-## Deployment Steps
+- A GitHub account with this repo pushed
+- Accounts for the three services this app depends on (all have free tiers):
+  - [Groq](https://console.groq.com) — LLM generation
+  - [Jina AI](https://jina.ai) — embeddings
+  - [Qdrant Cloud](https://cloud.qdrant.io) — vector database (create a free cluster)
+- A [Railway](https://railway.app) account (free tier available)
 
-### 1. Prepare Your Repository
-Make sure your code is pushed to GitHub:
+## Required environment variables
+
+Set these in your deployment platform's dashboard (or in `.env` for local Docker):
+
+| Variable | Purpose |
+|---|---|
+| `GROQ_API_KEY` | Groq API key for LLM generation |
+| `GROQ_MODEL` | e.g. `openai/gpt-oss-120b` — check [console.groq.com/docs/deprecations](https://console.groq.com/docs/deprecations) periodically, Groq retires models over time |
+| `JINA_API_KEY` | Jina API key for document embeddings |
+| `QDRANT_URL` | Your Qdrant Cloud cluster URL |
+| `QDRANT_API_KEY` | Your Qdrant Cloud API key |
+| `FRONTEND_URL` | Your deployed frontend's URL (for CORS) |
+| `NEXT_PUBLIC_API_URL` | Your deployed backend's URL (frontend only) |
+
+## Deploying the backend to Railway
+
+1. Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub repo → select this repository
+2. Railway will detect `railway.json`, which points it at `Dockerfile.backend`
+3. In the project's **Variables** tab, add the five backend env vars from the table above
+4. Deploy — Railway will build the image and give you a live URL
+
+## Deploying the frontend
+
+The frontend (`Dockerfile.frontend`) can deploy the same way — as a second Railway service pointed at the same repo, or on Vercel/Netlify if you prefer a dedicated frontend host. Either way, set `NEXT_PUBLIC_API_URL` to your backend's live URL.
+
+## Running locally with Docker Compose
+
 ```bash
-git add .
-git commit -m "Prepare for Railway deployment"
-git push origin main
+cp .env.example .env
+# fill in your real API keys in .env
+docker-compose up --build
+```
+Backend will be available at `http://localhost:8000`, frontend at `http://localhost:3000`.
+
+## Running locally without Docker
+
+**Backend:**
+```bash
+cd backend
+python -m venv venv
+# Windows:
+.\venv\Scripts\Activate.ps1
+# macOS/Linux:
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload
 ```
 
-### 2. Connect to Railway
-1. Go to [railway.app](https://railway.app)
-2. Sign up or log in
-3. Click "New Project"
-4. Select "Deploy from GitHub repo"
-5. Choose your repository
-
-### 3. Configure Environment Variables (Optional)
-In your Railway project dashboard:
-1. Go to "Variables" tab
-2. Add these optional variables for better performance:
-   - `GROQ_API_KEY` - Get from [Groq Cloud](https://console.groq.com/)
-   - `HF_TOKEN` - Get from [Hugging Face](https://huggingface.co/settings/tokens)
-
-### 4. Deploy
-Railway will automatically:
-- Detect the `railway.json` configuration
-- Build using the Dockerfile in `backend/`
-- Deploy your application
-- Provide you with a live URL
-
-## Configuration Options
-
-### Processing Modes
-
-**Local Mode (Default)**
-- No environment variables needed
-- Uses Ollama for both embeddings and generation
-- Slower but completely free
-
-**Hybrid Mode (Recommended)**
+**Frontend** (in a separate terminal):
 ```bash
-GROQ_API_KEY=your_groq_key_here
+cd frontend
+npm install
+npm run dev
 ```
-- Uses Ollama for embeddings (free)
-- Uses Groq for generation (fast, cheap)
-
-**Cloud Mode**
-```bash
-GROQ_API_KEY=your_groq_key_here
-HF_TOKEN=your_hf_token_here
-```
-- Uses Hugging Face for embeddings
-- Uses Groq for generation
-- Fastest option
 
 ## Troubleshooting
 
-### Common Issues
-
-1. **Build Failures**
-   - Check that your `railway.json` is properly configured
-   - Ensure all dependencies are in `backend/package.json`
-
-2. **Runtime Errors**
-   - Check Railway logs in the dashboard
-   - Verify environment variables are set correctly
-
-3. **Performance Issues**
-   - Add `GROQ_API_KEY` for faster response times
-   - The free tier has resource limitations
-
-### Logs and Monitoring
-- View logs in Railway dashboard under "Logs" tab
-- Monitor usage in "Usage" tab
-- Set up alerts for downtime
-
-## Scaling
-- Railway's free tier includes:
-  - 512MB RAM
-  - 1GB disk space
-  - Sleeps after 12 hours of inactivity
-- Upgrade to paid plans for:
-  - More resources
-  - Always-on instances
-  - Custom domains
+- **Backend won't start / `ModuleNotFoundError`** — make sure your virtual environment is activated (you should see `(venv)` at the start of your terminal prompt) before running `uvicorn`.
+- **"Backend unreachable" in the frontend** — check that the backend is actually running and that `NEXT_PUBLIC_API_URL` points at the right address/port.
+- **Startup log shows `Collection 'documents' doesn't exist`** — expected on a brand-new Qdrant cluster; it gets created automatically on your first document upload.
+- **`uvloop` install error on Windows** — `uvloop` doesn't support Windows. It's already marked as Unix-only in `requirements.txt` (`; sys_platform != "win32"`), so this shouldn't happen on a fresh install — if it does, confirm you're using the latest `requirements.txt`.
