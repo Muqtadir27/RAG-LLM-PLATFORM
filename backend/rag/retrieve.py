@@ -1,5 +1,5 @@
 from qdrant_client.models import Filter, FieldCondition, MatchValue
-from rag.embed import get_embedding, get_qdrant_client, ensure_collection, COLLECTION_NAME
+from rag.embed import get_embedding, get_qdrant_client, ensure_collection, with_qdrant_retry, COLLECTION_NAME
 from datetime import datetime, timedelta
 
 
@@ -23,7 +23,8 @@ def retrieve_chunks(
     embeddings = get_embedding([question])
     query_vector = embeddings[0]
 
-    results = client.search(
+    results = with_qdrant_retry(
+        client.search,
         collection_name=COLLECTION_NAME,
         query_vector=query_vector,
         query_filter=query_filter,
@@ -45,7 +46,8 @@ def list_all_documents(session_id: str) -> list[dict]:
         must=[FieldCondition(key="session_id", match=MatchValue(value=session_id))]
     )
 
-    results = client.scroll(
+    results = with_qdrant_retry(
+        client.scroll,
         collection_name=COLLECTION_NAME,
         scroll_filter=query_filter,
         limit=1000,
@@ -75,7 +77,8 @@ def delete_document_chunks(document_id: str, session_id: str) -> bool:
         ]
     )
 
-    results = client.scroll(
+    results = with_qdrant_retry(
+        client.scroll,
         collection_name=COLLECTION_NAME,
         scroll_filter=query_filter,
         limit=1000,
@@ -86,10 +89,7 @@ def delete_document_chunks(document_id: str, session_id: str) -> bool:
         return False
 
     ids = [point.id for point in results]
-    client.delete(
-        collection_name=COLLECTION_NAME,
-        points_selector=ids
-    )
+    with_qdrant_retry(client.delete, collection_name=COLLECTION_NAME, points_selector=ids)
     return True
 
 
@@ -98,7 +98,8 @@ def cleanup_old_sessions(max_age_hours: int = 24):
     client = get_qdrant_client()
     cutoff = (datetime.utcnow() - timedelta(hours=max_age_hours)).isoformat()
 
-    results = client.scroll(
+    results = with_qdrant_retry(
+        client.scroll,
         collection_name=COLLECTION_NAME,
         limit=10000,
         with_payload=True
@@ -110,5 +111,5 @@ def cleanup_old_sessions(max_age_hours: int = 24):
     ]
 
     if old_ids:
-        client.delete(collection_name=COLLECTION_NAME, points_selector=old_ids)
+        with_qdrant_retry(client.delete, collection_name=COLLECTION_NAME, points_selector=old_ids)
         print(f"[Cleanup] Deleted {len(old_ids)} chunks older than {max_age_hours}h")

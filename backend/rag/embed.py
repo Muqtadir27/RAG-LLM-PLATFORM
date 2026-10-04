@@ -1,6 +1,7 @@
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, PayloadSchemaType
 import os
+import time
 import requests
 from datetime import datetime
 import uuid
@@ -31,24 +32,47 @@ def get_qdrant_client() -> QdrantClient:
     return QdrantClient(
         url=os.getenv("QDRANT_URL"),
         api_key=os.getenv("QDRANT_API_KEY"),
+        timeout=30,
     )
+
+
+def with_qdrant_retry(fn, *args, retries: int = 3, delay: float = 1.5, **kwargs):
+    """
+    Calls a Qdrant client function with retries. Handles transient
+    'Connection reset by peer' errors that can happen on cross-region
+    or free-tier hosting (e.g. Render <-> Qdrant Cloud), where a
+    request occasionally gets an RST instead of a real error.
+    """
+    last_error = None
+    for attempt in range(1, retries + 1):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            last_error = e
+            is_last = attempt == retries
+            print(f"[Qdrant] Attempt {attempt}/{retries} failed: {e}" + (" — retrying..." if not is_last else ""))
+            if not is_last:
+                time.sleep(delay * attempt)  # simple backoff: 1.5s, 3s, ...
+    raise last_error
 
 
 def ensure_collection():
     client = get_qdrant_client()
-    existing = [c.name for c in client.get_collections().collections]
+    existing = [c.name for c in with_qdrant_retry(client.get_collections).collections]
     if COLLECTION_NAME not in existing:
-        client.create_collection(
+        with_qdrant_retry(
+            client.create_collection,
             collection_name=COLLECTION_NAME,
             vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
         )
-        # Create indexes for filtered search
-        client.create_payload_index(
+        with_qdrant_retry(
+            client.create_payload_index,
             collection_name=COLLECTION_NAME,
             field_name="session_id",
             field_schema=PayloadSchemaType.KEYWORD
         )
-        client.create_payload_index(
+        with_qdrant_retry(
+            client.create_payload_index,
             collection_name=COLLECTION_NAME,
             field_name="doc_id",
             field_schema=PayloadSchemaType.KEYWORD
@@ -78,5 +102,5 @@ def embed_and_store(chunks: list[str], doc_id: str, filename: str, session_id: s
         for i in range(len(chunks))
     ]
 
-    client.upsert(collection_name=COLLECTION_NAME, points=points)
+    with_qdrant_retry(client.upsert, collection_name=COLLECTION_NAME, points=points)
     print(f"[Qdrant] Stored {len(chunks)} chunks for: {filename} (session: {session_id[:8]}...)")
