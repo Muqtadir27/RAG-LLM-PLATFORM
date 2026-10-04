@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 import os, shutil, uuid
 
 from rag.ingest import ingest_pdf
@@ -11,11 +12,24 @@ from eval_router import router as eval_router
 
 load_dotenv()
 
-app = FastAPI(title="RAG Platform v2", version="2.0.0")
+# FIX: Use lifespan instead of deprecated @app.on_event("startup")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        cleanup_old_sessions(max_age_hours=24)
+    except Exception as e:
+        print(f"[Startup] Cleanup skipped: {e}")
+    yield
+
+app = FastAPI(title="RAG Platform v2", version="2.0.0", lifespan=lifespan)
+
+# FIX: Robust CORS handling. Supports comma-separated URLs in FRONTEND_URL.
+frontend_url_env = os.getenv("FRONTEND_URL", "http://localhost:3000")
+allowed_origins = [url.strip() for url in frontend_url_env.split(",") if url.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("FRONTEND_URL", "http://localhost:3000")],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -23,16 +37,9 @@ app.add_middleware(
 
 app.include_router(eval_router)
 
-UPLOAD_DIR = os.getenv("UPLOAD_DIR", "backend/uploads")
+# FIX: Use absolute path so it works regardless of working directory (e.g., on Render)
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", os.path.join(os.path.dirname(__file__), "uploads"))
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-
-@app.on_event("startup")
-def on_startup():
-    try:
-        cleanup_old_sessions(max_age_hours=24)
-    except Exception as e:
-        print(f"[Startup] Cleanup skipped: {e}")
 
 
 class QueryRequest(BaseModel):
@@ -83,7 +90,8 @@ async def upload_document(
             "message": f"Successfully processed {chunk_count} chunks"
         }
     except Exception as e:
-        os.remove(file_path)
+        if os.path.exists(file_path):
+            os.remove(file_path)
         raise HTTPException(500, f"Processing failed: {str(e)}")
 
 

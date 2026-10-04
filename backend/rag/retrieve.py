@@ -1,4 +1,4 @@
-from qdrant_client.models import Filter, FieldCondition, MatchValue
+from qdrant_client.models import Filter, FieldCondition, MatchValue, PointIdsList
 from rag.embed import get_embedding, get_qdrant_client, ensure_collection, with_qdrant_retry, COLLECTION_NAME
 from datetime import datetime, timedelta
 
@@ -23,14 +23,16 @@ def retrieve_chunks(
     embeddings = get_embedding([question])
     query_vector = embeddings[0]
 
+    # FIX: client.search is removed in qdrant-client >= 1.16.0
+    # Use client.query_points instead
     results = with_qdrant_retry(
-        client.search,
+        client.query_points,
         collection_name=COLLECTION_NAME,
-        query_vector=query_vector,
+        query=query_vector,
         query_filter=query_filter,
         limit=top_k,
         with_payload=True
-    )
+    ).points
 
     chunks = [r.payload["text"] for r in results]
     sources = [f"{r.payload['filename']} (chunk {r.payload['chunk_index']})" for r in results]
@@ -89,7 +91,13 @@ def delete_document_chunks(document_id: str, session_id: str) -> bool:
         return False
 
     ids = [point.id for point in results]
-    with_qdrant_retry(client.delete, collection_name=COLLECTION_NAME, points_selector=ids)
+    
+    # FIX: points_selector must be a PointIdsList object, not a raw list
+    with_qdrant_retry(
+        client.delete, 
+        collection_name=COLLECTION_NAME, 
+        points_selector=PointIdsList(points=ids)
+    )
     return True
 
 
@@ -111,5 +119,10 @@ def cleanup_old_sessions(max_age_hours: int = 24):
     ]
 
     if old_ids:
-        with_qdrant_retry(client.delete, collection_name=COLLECTION_NAME, points_selector=old_ids)
+        # FIX: points_selector must be a PointIdsList object
+        with_qdrant_retry(
+            client.delete, 
+            collection_name=COLLECTION_NAME, 
+            points_selector=PointIdsList(points=old_ids)
+        )
         print(f"[Cleanup] Deleted {len(old_ids)} chunks older than {max_age_hours}h")
