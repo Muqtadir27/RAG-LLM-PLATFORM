@@ -31,7 +31,7 @@ def generate_answer(question: str, context_chunks: list[str]) -> str:
     if not api_key:
         return "⚠ No API key configured. Add GROQ_API_KEY to your .env file."
 
-    model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     context = "\n\n---\n\n".join(context_chunks)
     prompt = build_prompt(question, context)
 
