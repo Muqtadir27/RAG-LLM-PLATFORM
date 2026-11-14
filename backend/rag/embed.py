@@ -32,8 +32,8 @@ def get_qdrant_client() -> QdrantClient:
     return QdrantClient(
         url=os.getenv("QDRANT_URL"),
         api_key=os.getenv("QDRANT_API_KEY"),
-        timeout=30,
-        prefer_grpc=False
+        timeout=60,         # Increased timeout for cloud latency
+        prefer_grpc=False   # Force REST API (port 6333) for reliability
     )
 
 
