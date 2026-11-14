@@ -1,11 +1,11 @@
-import PyPDF2
+import pypdf
 from rag.embed import embed_and_store
 
 
 def extract_text_from_pdf(file_path: str) -> str:
     text = ""
     with open(file_path, "rb") as f:
-        reader = PyPDF2.PdfReader(f)
+        reader = pypdf.PdfReader(f)
         for page_num, page in enumerate(reader.pages):
             page_text = page.extract_text()
             if page_text:
