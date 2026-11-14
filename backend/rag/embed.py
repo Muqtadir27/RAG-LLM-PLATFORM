@@ -3,6 +3,7 @@ from qdrant_client.models import Distance, VectorParams, PointStruct, PayloadSch
 import os
 import time
 import requests
+import httpx  # NEW IMPORT
 from datetime import datetime
 import uuid
 
@@ -32,18 +33,14 @@ def get_qdrant_client() -> QdrantClient:
     return QdrantClient(
         url=os.getenv("QDRANT_URL"),
         api_key=os.getenv("QDRANT_API_KEY"),
-        timeout=60,         # Increased timeout for cloud latency
-        prefer_grpc=False   # Force REST API (port 6333) for reliability
+        timeout=60.0,
+        prefer_grpc=False,
+        # FIX: Disable keep-alive connections to prevent ECONNRESET
+        limits=httpx.Limits(max_connections=None, max_keepalive_connections=0)
     )
 
 
 def with_qdrant_retry(fn, *args, retries: int = 3, delay: float = 1.5, **kwargs):
-    """
-    Calls a Qdrant client function with retries. Handles transient
-    'Connection reset by peer' errors that can happen on cross-region
-    or free-tier hosting (e.g. Render <-> Qdrant Cloud), where a
-    request occasionally gets an RST instead of a real error.
-    """
     last_error = None
     for attempt in range(1, retries + 1):
         try:
@@ -53,7 +50,7 @@ def with_qdrant_retry(fn, *args, retries: int = 3, delay: float = 1.5, **kwargs)
             is_last = attempt == retries
             print(f"[Qdrant] Attempt {attempt}/{retries} failed: {e}" + (" — retrying..." if not is_last else ""))
             if not is_last:
-                time.sleep(delay * attempt)  # simple backoff: 1.5s, 3s, ...
+                time.sleep(delay * attempt)
     raise last_error
 
 
