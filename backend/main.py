@@ -5,7 +5,10 @@ from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 import os, shutil, uuid
 
+from fastapi.responses import JSONResponse
+
 from rag.ingest import ingest_pdf
+from rag.embed import QdrantUnavailable, check_qdrant
 from rag.retrieve import retrieve_chunks, cleanup_old_sessions
 from rag.generate import generate_answer
 from eval_router import router as eval_router
@@ -37,6 +40,16 @@ app.add_middleware(
 
 app.include_router(eval_router)
 
+
+@app.exception_handler(QdrantUnavailable)
+async def qdrant_unavailable_handler(request, exc: QdrantUnavailable):
+    # Clean 503 instead of an unhandled 500 + stack trace
+    print(f"[Qdrant] Unavailable after retries: {exc}")
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Vector database is unreachable right now. Please try again in a moment."},
+    )
+
 # FIX: Use absolute path so it works regardless of working directory (e.g., on Render)
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", os.path.join(os.path.dirname(__file__), "uploads"))
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -64,6 +77,13 @@ def health():
     return {"status": "ok", "version": "2.0.0"}
 
 
+@app.get("/health/deps")
+def health_deps():
+    """Checks that the backend can actually reach Qdrant (no secrets in the response)."""
+    result = check_qdrant()
+    return JSONResponse(status_code=200 if result["ok"] else 503, content=result)
+
+
 @app.post("/upload")
 async def upload_document(
     file: UploadFile = File(...),
@@ -89,6 +109,10 @@ async def upload_document(
             "chunks": chunk_count,
             "message": f"Successfully processed {chunk_count} chunks"
         }
+    except QdrantUnavailable:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise  # handled above as a clean 503
     except Exception as e:
         if os.path.exists(file_path):
             os.remove(file_path)

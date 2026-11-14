@@ -28,7 +28,7 @@ export default function UploadModal({ onClose, onUploadSuccess }: UploadModalPro
 
     try {
       setTimeout(() => setProgress('EXTRACTING SEMANTIC VECTORS...'), 800)
-      setTimeout(() => setProgress('INDEXING TO CHROMADB...'), 1600)
+      setTimeout(() => setProgress('INDEXING TO QDRANT...'), 1600)
 
       const res = await fetch(`${API_URL}/upload`, {
         method: 'POST',

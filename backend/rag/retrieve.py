@@ -1,6 +1,25 @@
-from qdrant_client.models import Filter, FieldCondition, MatchValue, PointIdsList
-from rag.embed import get_embedding, get_fresh_qdrant_client, ensure_collection, with_qdrant_retry, COLLECTION_NAME
+from qdrant_client.models import Filter, FieldCondition, MatchValue, PointIdsList, FilterSelector
+from rag.embed import get_embedding, ensure_collection, with_qdrant, COLLECTION_NAME
 from datetime import datetime, timedelta
+
+SCROLL_PAGE = 256
+
+
+def _scroll_all(client, scroll_filter=None, payload=True):
+    """Yield every matching point, following Qdrant's scroll offset."""
+    offset = None
+    while True:
+        points, offset = client.scroll(
+            collection_name=COLLECTION_NAME,
+            scroll_filter=scroll_filter,
+            limit=SCROLL_PAGE,
+            offset=offset,
+            with_payload=payload,
+            with_vectors=False,
+        )
+        yield from points
+        if offset is None:
+            break
 
 
 def retrieve_chunks(
@@ -10,72 +29,52 @@ def retrieve_chunks(
     top_k: int = 3
 ) -> tuple[list[str], list[str]]:
     ensure_collection()
-    
-    # Build filter
+
     conditions = [FieldCondition(key="session_id", match=MatchValue(value=session_id))]
     if document_id:
         conditions.append(FieldCondition(key="doc_id", match=MatchValue(value=document_id)))
-
     query_filter = Filter(must=conditions)
 
-    # Get embedding for the question FIRST (this takes time, so we don't want a DB connection open yet)
-    embeddings = get_embedding([question])
-    query_vector = embeddings[0]
+    # Embed first (slow) so no DB connection is open while we wait
+    query_vector = get_embedding([question])[0]
 
-    # Create a fresh client ONLY when we are ready to query
-    client = get_fresh_qdrant_client()
-    try:
-        results = with_qdrant_retry(
-            client.query_points,
+    results = with_qdrant(
+        lambda c: c.query_points(
             collection_name=COLLECTION_NAME,
             query=query_vector,
             query_filter=query_filter,
             limit=top_k,
-            with_payload=True
+            with_payload=True,
         ).points
-    finally:
-        client.close()
+    )
 
     chunks = [r.payload["text"] for r in results]
     sources = [f"{r.payload['filename']} (chunk {r.payload['chunk_index']})" for r in results]
-
     return chunks, sources
 
 
 def list_all_documents(session_id: str) -> list[dict]:
     """List only documents belonging to this session."""
-    client = get_fresh_qdrant_client()
+    ensure_collection()
 
     query_filter = Filter(
         must=[FieldCondition(key="session_id", match=MatchValue(value=session_id))]
     )
 
-    try:
-        results = with_qdrant_retry(
-            client.scroll,
-            collection_name=COLLECTION_NAME,
-            scroll_filter=query_filter,
-            limit=1000,
-            with_payload=True
-        )[0]
-    finally:
-        client.close()
+    def op(client):
+        seen = {}
+        for point in _scroll_all(client, query_filter, payload=["doc_id", "filename"]):
+            doc_id = point.payload["doc_id"]
+            if doc_id not in seen:
+                seen[doc_id] = {"document_id": doc_id, "filename": point.payload["filename"]}
+        return list(seen.values())
 
-    seen = {}
-    for point in results:
-        doc_id = point.payload["doc_id"]
-        if doc_id not in seen:
-            seen[doc_id] = {
-                "document_id": doc_id,
-                "filename": point.payload["filename"]
-            }
-
-    return list(seen.values())
+    return with_qdrant(op)
 
 
 def delete_document_chunks(document_id: str, session_id: str) -> bool:
     """Delete chunks only if they belong to this session."""
-    client = get_fresh_qdrant_client()
+    ensure_collection()
 
     query_filter = Filter(
         must=[
@@ -84,54 +83,41 @@ def delete_document_chunks(document_id: str, session_id: str) -> bool:
         ]
     )
 
-    try:
-        results = with_qdrant_retry(
-            client.scroll,
-            collection_name=COLLECTION_NAME,
-            scroll_filter=query_filter,
-            limit=1000,
-            with_payload=False
-        )[0]
-
-        if not results:
+    def op(client):
+        count = client.count(
+            collection_name=COLLECTION_NAME, count_filter=query_filter, exact=True
+        ).count
+        if count == 0:
             return False
-
-        ids = [point.id for point in results]
-        
-        with_qdrant_retry(
-            client.delete, 
-            collection_name=COLLECTION_NAME, 
-            points_selector=PointIdsList(points=ids)
+        client.delete(
+            collection_name=COLLECTION_NAME,
+            points_selector=FilterSelector(filter=query_filter),
+            wait=True,
         )
         return True
-    finally:
-        client.close()
+
+    return with_qdrant(op)
 
 
 def cleanup_old_sessions(max_age_hours: int = 24):
     """Delete all chunks from sessions older than max_age_hours."""
-    client = get_fresh_qdrant_client()
+    ensure_collection()
     cutoff = (datetime.utcnow() - timedelta(hours=max_age_hours)).isoformat()
 
-    try:
-        results = with_qdrant_retry(
-            client.scroll,
-            collection_name=COLLECTION_NAME,
-            limit=10000,
-            with_payload=True
-        )[0]
-
+    def op(client):
         old_ids = [
-            point.id for point in results
-            if point.payload.get("created_at", "9999") < cutoff
+            point.id
+            for point in _scroll_all(client, payload=["created_at"])
+            if (point.payload or {}).get("created_at", "9999") < cutoff
         ]
-
-        if old_ids:
-            with_qdrant_retry(
-                client.delete, 
-                collection_name=COLLECTION_NAME, 
-                points_selector=PointIdsList(points=old_ids)
+        for i in range(0, len(old_ids), 500):
+            client.delete(
+                collection_name=COLLECTION_NAME,
+                points_selector=PointIdsList(points=old_ids[i:i + 500]),
+                wait=True,
             )
-            print(f"[Cleanup] Deleted {len(old_ids)} chunks older than {max_age_hours}h")
-    finally:
-        client.close()
+        return len(old_ids)
+
+    deleted = with_qdrant(op)
+    if deleted:
+        print(f"[Cleanup] Deleted {deleted} chunks older than {max_age_hours}h")
