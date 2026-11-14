@@ -37,8 +37,8 @@ export default function Chat({ selectedDoc, messages, setMessages }: ChatProps) 
         body: JSON.stringify({ question, document_id: selectedDoc?.document_id || null }),
       })
       const data = await res.json()
-      const answer = data.answer
-      const finalMessages = [...updated, { role: 'assistant' as const, content: answer, sources: data.sources }]
+      const answer = res.ok ? data.answer : `⚠ ${data.detail || 'Request failed. Please try again.'}`
+      const finalMessages = [...updated, { role: 'assistant' as const, content: answer, sources: res.ok ? data.sources : undefined }]
       setMessages(finalMessages)
 
     } catch {

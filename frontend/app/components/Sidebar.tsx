@@ -36,7 +36,7 @@ export default function Sidebar({ documents, setDocuments, selectedDoc, setSelec
         headers: { 'X-Session-Id': getSessionId() }
       })
       const data = await res.json()
-      setDocuments(data.documents)
+      if (res.ok && Array.isArray(data.documents)) setDocuments(data.documents)
     } catch {}
   }
 
