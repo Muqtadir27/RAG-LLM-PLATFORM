@@ -1,6 +1,12 @@
-from openai import OpenAI
-import os
-import httpx
+from collections.abc import Iterator
+
+from rag.llm import LLMError, create_completion, friendly_error, get_client, model_name
+
+SYSTEM_PROMPT = (
+    "You are a precise document analysis assistant. Answer only from the provided document content. "
+    "Format answers in clean Markdown: short paragraphs, bullet or numbered lists, **bold** for key terms."
+)
+MAX_TOKENS = 4000  # gpt-oss models spend part of this on hidden reasoning
 
 
 def build_prompt(question: str, context: str) -> str:
@@ -26,45 +32,57 @@ RULES:
 ANSWER:"""
 
 
-def generate_answer(question: str, context_chunks: list[str]) -> str:
-    api_key = os.getenv("GROQ_API_KEY", "").strip()
-    if not api_key:
-        return "⚠ No API key configured. Add GROQ_API_KEY to your .env file."
-
-    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+def _messages(question: str, context_chunks: list[str]) -> list[dict]:
     context = "\n\n---\n\n".join(context_chunks)
-    prompt = build_prompt(question, context)
+    return [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": build_prompt(question, context)},
+    ]
 
-    client = OpenAI(
-        api_key=api_key,
-        base_url="https://api.groq.com/openai/v1/",
-        timeout=60.0,
-        http_client=httpx.Client(
-            timeout=httpx.Timeout(connect=15.0, read=60.0, write=15.0, pool=10.0)
-        )
-    )
 
+def generate_answer(question: str, context_chunks: list[str]) -> str:
+    """Non-streaming answer. Errors come back as a '⚠ ...' string (used by /query and /eval/score)."""
     try:
+        client = get_client()
+        model = model_name()
         print(f"[AI] Calling Groq ({model})...")
-        response = client.chat.completions.create(
+        response = create_completion(
+            client,
             model=model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a precise document analysis assistant. Answer only from the provided document content."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
+            messages=_messages(question, context_chunks),
             temperature=0.1,
-            max_tokens=2000,
+            max_tokens=MAX_TOKENS,
         )
-        answer = response.choices[0].message.content
+        answer = response.choices[0].message.content or ""
         print("[AI] Groq responded successfully")
         return answer
-
     except Exception as e:
         print(f"[AI] Groq failed: {e}")
-        return f"⚠ Groq error: {str(e)}"
+        return f"⚠ {friendly_error(e)}"
+
+
+def stream_answer(question: str, context_chunks: list[str]) -> Iterator[str]:
+    """Yield answer text as it is generated. Raises LLMError (user-safe message) on failure."""
+    try:
+        client = get_client()
+        model = model_name()
+        print(f"[AI] Streaming from Groq ({model})...")
+        stream = create_completion(
+            client,
+            model=model,
+            messages=_messages(question, context_chunks),
+            temperature=0.1,
+            max_tokens=MAX_TOKENS,
+            stream=True,
+        )
+        for chunk in stream:
+            if not chunk.choices:
+                continue
+            text = getattr(chunk.choices[0].delta, "content", None)
+            if text:
+                yield text
+    except LLMError:
+        raise
+    except Exception as e:
+        print(f"[AI] Groq stream failed: {e}")
+        raise LLMError(friendly_error(e)) from e

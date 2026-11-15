@@ -22,12 +22,14 @@ def _scroll_all(client, scroll_filter=None, payload=True):
             break
 
 
-def retrieve_chunks(
+def retrieve_citations(
     question: str,
     session_id: str,
     document_id: str | None = None,
     top_k: int = 3
-) -> tuple[list[str], list[str]]:
+) -> tuple[list[str], list[str], list[dict]]:
+    """Returns (chunk texts, source labels, citations). Citations carry the chunk text and similarity score
+    so the UI can show exactly what each answer was grounded in."""
     ensure_collection()
 
     conditions = [FieldCondition(key="session_id", match=MatchValue(value=session_id))]
@@ -50,11 +52,31 @@ def retrieve_chunks(
 
     chunks = [r.payload["text"] for r in results]
     sources = [f"{r.payload['filename']} (chunk {r.payload['chunk_index']})" for r in results]
+    citations = [
+        {
+            "label": sources[i],
+            "filename": r.payload["filename"],
+            "chunk_index": r.payload["chunk_index"],
+            "text": r.payload["text"],
+            "score": round(float(r.score), 4) if r.score is not None else None,
+        }
+        for i, r in enumerate(results)
+    ]
+    return chunks, sources, citations
+
+
+def retrieve_chunks(
+    question: str,
+    session_id: str,
+    document_id: str | None = None,
+    top_k: int = 3
+) -> tuple[list[str], list[str]]:
+    chunks, sources, _ = retrieve_citations(question, session_id, document_id, top_k)
     return chunks, sources
 
 
 def list_all_documents(session_id: str) -> list[dict]:
-    """List only documents belonging to this session."""
+    """List only documents belonging to this session, newest first, with chunk counts."""
     ensure_collection()
 
     query_filter = Filter(
@@ -62,12 +84,17 @@ def list_all_documents(session_id: str) -> list[dict]:
     )
 
     def op(client):
-        seen = {}
-        for point in _scroll_all(client, query_filter, payload=["doc_id", "filename"]):
-            doc_id = point.payload["doc_id"]
-            if doc_id not in seen:
-                seen[doc_id] = {"document_id": doc_id, "filename": point.payload["filename"]}
-        return list(seen.values())
+        seen: dict[str, dict] = {}
+        for point in _scroll_all(client, query_filter, payload=["doc_id", "filename", "created_at"]):
+            payload = point.payload
+            doc = seen.setdefault(payload["doc_id"], {
+                "document_id": payload["doc_id"],
+                "filename": payload["filename"],
+                "chunks": 0,
+                "uploaded_at": payload.get("created_at"),
+            })
+            doc["chunks"] += 1
+        return sorted(seen.values(), key=lambda d: d["uploaded_at"] or "", reverse=True)
 
     return with_qdrant(op)
 

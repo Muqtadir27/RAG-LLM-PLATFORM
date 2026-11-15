@@ -20,7 +20,7 @@ def get_session(x_session_id: str | None) -> str:
 
 
 @router.post("/score")
-async def eval_single(
+def eval_single(
     request: EvalRequest,
     x_session_id: str | None = Header(default=None)
 ):
@@ -48,6 +48,10 @@ async def eval_single(
         answer=answer,
         context_chunks=chunks
     )
+
+    if not eval_result.get("success"):
+        # Surface scoring failures instead of returning a 200 the UI can't interpret
+        raise HTTPException(502, f"Scoring failed: {eval_result.get('error', 'unknown error')}")
 
     return {
         "question": request.question,

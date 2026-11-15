@@ -1,165 +1,255 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Document, Message } from '../page'
-import UploadModal from './UploadModal'
-import { getSessionId } from '../lib/session'
-import { API_URL } from '../lib/api'
-
-type ActiveTab = 'query' | 'eval'
+import { useState } from 'react'
+import type { ActiveTab, Document } from '../lib/types'
+import type { ServerStatus } from '../lib/useServerStatus'
+import { cn, relativeTime, stripExt } from '../lib/format'
+import { Icon, Logo, type IconName } from './ui/Icons'
+import { ConfirmDialog } from './ui/ConfirmDialog'
 
 interface SidebarProps {
   documents: Document[]
-  setDocuments: (docs: Document[]) => void
-  selectedDoc: Document | null
-  setSelectedDoc: (doc: Document | null) => void
-  setMessages: (messages: Message[]) => void
+  loading: boolean
+  error: string | null
+  onRetry: () => void
+  selectedId: string | null
+  onSelect: (doc: Document | null) => void
+  onDelete: (doc: Document) => Promise<void>
+  onUpload: () => void
   activeTab: ActiveTab
-  setActiveTab: (tab: ActiveTab) => void
+  onTabChange: (tab: ActiveTab) => void
+  status: ServerStatus
+  model?: string
+  /** mobile drawer state */
+  open: boolean
+  onClose: () => void
 }
 
-export default function Sidebar({ documents, setDocuments, selectedDoc, setSelectedDoc, setMessages, activeTab, setActiveTab }: SidebarProps) {
-  const [showUpload, setShowUpload] = useState(false)
-  const [hoveredDoc, setHoveredDoc] = useState<string | null>(null)
-  const [time, setTime] = useState('')
+const STATUS_UI: Record<ServerStatus, { label: string; dot: string }> = {
+  checking: { label: 'Connecting…', dot: 'bg-ink-3' },
+  waking: { label: 'Waking up server…', dot: 'bg-warn animate-pulse' },
+  online: { label: 'Connected', dot: 'bg-ok shadow-[0_0_8px_var(--color-ok)]' },
+  offline: { label: 'Server offline', dot: 'bg-bad' },
+}
 
-  useEffect(() => {
-    const tick = () => setTime(new Date().toLocaleTimeString('en-US', { hour12: false }))
-    tick()
-    const id = setInterval(tick, 1000)
-    return () => clearInterval(id)
-  }, [])
+const TABS: { id: ActiveTab; label: string; icon: IconName }[] = [
+  { id: 'query', label: 'Chat', icon: 'chat' },
+  { id: 'eval', label: 'Evaluate', icon: 'gauge' },
+]
 
-  const fetchDocuments = async () => {
+function prettyModel(model?: string) {
+  if (!model) return 'RAG engine'
+  return model.split('/').pop() ?? model
+}
+
+export default function Sidebar(props: SidebarProps) {
+  const { documents, loading, error, onRetry, selectedId, onSelect, onDelete, onUpload, activeTab, onTabChange, status, model, open, onClose } = props
+  const [pendingDelete, setPendingDelete] = useState<Document | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const st = STATUS_UI[status]
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return
+    setDeleting(true)
     try {
-      const res = await fetch(`${API_URL}/documents`, {
-        headers: { 'X-Session-Id': getSessionId() }
-      })
-      const data = await res.json()
-      if (res.ok && Array.isArray(data.documents)) setDocuments(data.documents)
-    } catch {}
+      await onDelete(pendingDelete)
+    } finally {
+      setDeleting(false)
+      setPendingDelete(null)
+    }
   }
 
-  useEffect(() => { fetchDocuments() }, [])
-
-  const handleDelete = async (docId: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    try {
-      await fetch(`${API_URL}/documents/${docId}`, {
-        method: 'DELETE',
-        headers: { 'X-Session-Id': getSessionId() }
-      })
-      if (selectedDoc?.document_id === docId) { setSelectedDoc(null); setMessages([]) }
-      await fetchDocuments()
-    } catch {}
+  const pick = (doc: Document | null) => {
+    onSelect(doc)
+    onClose()
   }
 
   return (
     <>
-      <aside style={{
-        width: 280, minWidth: 280, display: 'flex', flexDirection: 'column',
-        overflow: 'hidden',
-        background: 'linear-gradient(180deg, rgba(0,8,20,0.97) 0%, rgba(0,4,12,0.99) 100%)',
-        borderRight: '1px solid rgba(0,212,255,0.12)', position: 'relative',
-      }}>
-        <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 1, background: 'linear-gradient(180deg, transparent, rgba(0,212,255,0.4) 30%, rgba(0,212,255,0.4) 70%, transparent)' }} />
+      {/* mobile overlay */}
+      <div
+        className={cn(
+          'fixed inset-0 z-30 bg-black/60 backdrop-blur-sm transition-opacity md:hidden',
+          open ? 'opacity-100' : 'pointer-events-none opacity-0',
+        )}
+        onClick={onClose}
+        aria-hidden="true"
+      />
 
-        {/* HEADER */}
-        <div style={{ flexShrink: 0, padding: '16px 20px 14px', borderBottom: '1px solid rgba(0,212,255,0.08)', position: 'relative' }}>
-          <div style={{ position: 'absolute', top: 10, left: 10, width: 10, height: 10, borderTop: '1px solid rgba(0,212,255,0.5)', borderLeft: '1px solid rgba(0,212,255,0.5)' }} />
-          <div style={{ position: 'absolute', top: 10, right: 22, width: 10, height: 10, borderTop: '1px solid rgba(0,212,255,0.5)', borderRight: '1px solid rgba(0,212,255,0.5)' }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#00d4ff', boxShadow: '0 0 8px #00d4ff, 0 0 16px #00d4ff', animation: 'glow-pulse 2s ease-in-out infinite' }} />
-            <h1 className="orbitron" style={{ fontSize: 12, fontWeight: 800, color: '#00d4ff', letterSpacing: 3, textTransform: 'uppercase' }}>RAG.NEXUS</h1>
+      <aside
+        aria-label="Documents and navigation"
+        className={cn(
+          'fixed inset-y-0 left-0 z-40 flex w-[300px] max-w-[86vw] flex-col border-r border-line bg-surface/95 backdrop-blur-xl transition-transform duration-300 md:static md:z-auto md:max-w-none md:translate-x-0 md:bg-surface/60',
+          open ? 'translate-x-0' : '-translate-x-full',
+        )}
+      >
+        {/* brand */}
+        <div className="flex items-center gap-3 px-5 pb-4 pt-5">
+          <Logo size={30} glow />
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-[15px] font-extrabold leading-none tracking-[0.18em] text-white">RAG.NEXUS</h1>
+            <p className="mt-1.5 truncate font-mono text-[11px] text-ink-3" title={model}>
+              v2.0 · {prettyModel(model)}
+            </p>
           </div>
-          <p style={{ fontSize: 8, color: 'rgba(0,212,255,0.35)', letterSpacing: 2, marginLeft: 15, fontFamily: 'var(--font-jetbrains)' }}>v2.0 // GLM-4.7 ENGINE</p>
-          <div style={{ marginTop: 10, padding: '5px 8px', background: 'rgba(0,212,255,0.04)', border: '1px solid rgba(0,212,255,0.08)', borderRadius: 4, display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 8, color: 'rgba(0,212,255,0.3)', letterSpacing: 1, fontFamily: 'var(--font-jetbrains)' }}>SYS.TIME</span>
-            <span style={{ fontSize: 8, color: '#00d4ff', fontFamily: 'var(--font-jetbrains)', letterSpacing: 1 }}>{time}</span>
-          </div>
-        </div>
-
-        {/* MODE TABS */}
-        <div style={{ flexShrink: 0, padding: '10px 16px 0', display: 'flex', gap: 4 }}>
-          {(['query', 'eval'] as ActiveTab[]).map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)} style={{
-              flex: 1, padding: '7px 0', borderRadius: 5, border: 'none', cursor: 'pointer',
-              fontSize: 8, letterSpacing: 2, fontFamily: 'var(--font-jetbrains)', textTransform: 'uppercase', fontWeight: 700, transition: 'all 0.2s',
-              background: activeTab === tab ? 'linear-gradient(135deg, rgba(0,212,255,0.15), rgba(0,80,200,0.1))' : 'rgba(0,212,255,0.03)',
-              color: activeTab === tab ? '#00d4ff' : 'rgba(0,212,255,0.3)',
-              borderBottom: activeTab === tab ? '1px solid rgba(0,212,255,0.4)' : '1px solid rgba(0,212,255,0.08)',
-              boxShadow: activeTab === tab ? '0 0 12px rgba(0,212,255,0.08)' : 'none',
-            }}>
-              {tab === 'query' ? '⬡ QUERY' : '◈ EVAL'}
-            </button>
-          ))}
-        </div>
-
-        {/* UPLOAD BUTTON */}
-        <div style={{ flexShrink: 0, padding: '12px 16px' }}>
-          <button
-            onClick={() => setShowUpload(true)}
-            style={{ width: '100%', padding: '9px 16px', background: 'linear-gradient(135deg, rgba(0,212,255,0.08), rgba(0,100,200,0.08))', border: '1px solid rgba(0,212,255,0.25)', borderRadius: 6, color: '#00d4ff', fontSize: 9, letterSpacing: 2, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: 'var(--font-jetbrains)', textTransform: 'uppercase', transition: 'all 0.2s' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg, rgba(0,212,255,0.15), rgba(0,100,200,0.15))'; (e.currentTarget as HTMLElement).style.boxShadow = '0 0 16px rgba(0,212,255,0.15)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg, rgba(0,212,255,0.08), rgba(0,100,200,0.08))'; (e.currentTarget as HTMLElement).style.boxShadow = 'none' }}
-          >
-            <span style={{ fontSize: 13 }}>⊕</span>
-            LOAD DOCUMENT
+          <button className="icon-btn md:hidden" onClick={onClose} aria-label="Close menu">
+            <Icon name="x" size={18} />
           </button>
         </div>
 
-        {/* DOCUMENTS LIST */}
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 16px 16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <span style={{ fontSize: 7, color: 'rgba(0,212,255,0.3)', letterSpacing: 2, textTransform: 'uppercase', fontFamily: 'var(--font-jetbrains)' }}>Neural Index</span>
-            <span style={{ fontSize: 7, color: '#00d4ff', background: 'rgba(0,212,255,0.08)', border: '1px solid rgba(0,212,255,0.15)', borderRadius: 3, padding: '1px 5px', letterSpacing: 1, fontFamily: 'var(--font-jetbrains)' }}>{documents.length} FILES</span>
-          </div>
-
-          {documents.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '24px 0' }}>
-              <div style={{ fontSize: 22, marginBottom: 8, opacity: 0.2 }}>◈</div>
-              <p style={{ fontSize: 8, color: 'rgba(0,212,255,0.2)', letterSpacing: 1, fontFamily: 'var(--font-jetbrains)' }}>NO DATA INDEXED</p>
-              <p style={{ fontSize: 7, color: 'rgba(0,212,255,0.12)', marginTop: 3, letterSpacing: 1, fontFamily: 'var(--font-jetbrains)' }}>LOAD A DOCUMENT TO BEGIN</p>
-            </div>
-          ) : (
-            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-              {documents.map((doc, i) => (
-                <li
-                  key={doc.document_id}
+        {/* mode switch */}
+        <div className="px-4">
+          <div role="tablist" aria-label="Mode" className="grid grid-cols-2 gap-1 rounded-xl border border-line bg-black/25 p-1">
+            {TABS.map(tab => {
+              const active = activeTab === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  role="tab"
+                  aria-selected={active}
                   onClick={() => {
-                    if (selectedDoc?.document_id !== doc.document_id) setMessages([])
-                    setSelectedDoc(doc)
+                    onTabChange(tab.id)
+                    onClose()
                   }}
-                  onMouseEnter={() => setHoveredDoc(doc.document_id)}
-                  onMouseLeave={() => setHoveredDoc(null)}
-                  style={{ padding: '9px 10px', borderRadius: 6, cursor: 'pointer', transition: 'all 0.15s', background: selectedDoc?.document_id === doc.document_id ? 'linear-gradient(135deg, rgba(0,212,255,0.1), rgba(0,100,255,0.07))' : hoveredDoc === doc.document_id ? 'rgba(0,212,255,0.04)' : 'transparent', border: selectedDoc?.document_id === doc.document_id ? '1px solid rgba(0,212,255,0.25)' : '1px solid transparent', display: 'flex', alignItems: 'center', justifyContent: 'space-between', animation: `fadeSlideIn 0.3s ease ${i * 0.04}s both` }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-                    <span style={{ fontSize: 9, color: selectedDoc?.document_id === doc.document_id ? '#00d4ff' : 'rgba(0,212,255,0.3)', flexShrink: 0 }}>▸</span>
-                    <span style={{ fontSize: 10, color: selectedDoc?.document_id === doc.document_id ? '#00d4ff' : 'rgba(255,255,255,0.45)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: 0.3, fontFamily: 'var(--font-jetbrains)' }}>
-                      {doc.filename.replace('.pdf', '')}
-                    </span>
-                  </div>
-                  {hoveredDoc === doc.document_id && (
-                    <button onClick={e => handleDelete(doc.document_id, e)} style={{ background: 'none', border: 'none', color: 'rgba(255,60,60,0.6)', cursor: 'pointer', fontSize: 10, padding: '0 2px', flexShrink: 0 }}>✕</button>
+                  className={cn(
+                    'flex items-center justify-center gap-2 rounded-lg py-2 text-[13px] font-medium transition-all',
+                    active ? 'bg-surface-3 text-white shadow-[0_1px_0_rgb(255_255_255/0.06)_inset]' : 'text-ink-3 hover:text-ink-2',
                   )}
-                </li>
-              ))}
-            </ul>
+                >
+                  <Icon name={tab.icon} size={15} />
+                  {tab.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="px-4 pb-3 pt-4">
+          <button className="btn btn-primary w-full" onClick={() => { onUpload(); onClose() }}>
+            <Icon name="plus" size={16} strokeWidth={2.4} />
+            Add document
+          </button>
+        </div>
+
+        {/* documents */}
+        <div className="flex items-center justify-between px-5 pb-2 pt-1">
+          <span className="label">Documents</span>
+          {!loading && !error && (
+            <span className="rounded-md border border-line bg-white/[0.03] px-1.5 py-0.5 font-mono text-[11px] text-ink-2">{documents.length}</span>
           )}
         </div>
 
-        {/* FOOTER */}
-        <div style={{ flexShrink: 0, padding: '10px 16px', borderTop: '1px solid rgba(0,212,255,0.06)', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#00ff88', boxShadow: '0 0 6px #00ff88' }} />
-          <span style={{ fontSize: 7, color: 'rgba(0,212,255,0.25)', letterSpacing: 1.5, fontFamily: 'var(--font-jetbrains)' }}>NEURAL ENGINE ONLINE</span>
+        <nav aria-label="Documents" className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+          {loading ? (
+            <div className="space-y-2 px-1 pt-1" aria-busy="true" aria-label="Loading documents">
+              {[0, 1, 2].map(i => (
+                <div key={i} className="flex items-center gap-3 rounded-xl p-2.5">
+                  <div className="skeleton h-9 w-9 shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="skeleton h-3 w-4/5" />
+                    <div className="skeleton h-2.5 w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : error ? (
+            <div className="mx-1 mt-1 rounded-xl border border-bad/25 bg-bad/[0.06] p-4 text-center">
+              <Icon name="alert" size={20} className="mx-auto text-bad" />
+              <p className="mt-2 text-[13px] leading-snug text-ink-2">{error}</p>
+              <button className="btn btn-ghost mt-3 !py-1.5" onClick={onRetry}>
+                <Icon name="refresh" size={14} /> Retry
+              </button>
+            </div>
+          ) : documents.length === 0 ? (
+            <div className="mx-1 mt-1 rounded-xl border border-dashed border-line-2 p-6 text-center">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10 text-accent">
+                <Icon name="file" size={18} />
+              </div>
+              <p className="mt-3 text-[13px] font-medium text-ink">No documents yet</p>
+              <p className="mt-1 text-xs leading-relaxed text-ink-3">Add a PDF to start asking questions about it.</p>
+            </div>
+          ) : (
+            <ul className="space-y-1">
+              {documents.length > 1 && (
+                <li>
+                  <button
+                    onClick={() => pick(null)}
+                    aria-current={selectedId === null}
+                    className={cn(
+                      'flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-colors',
+                      selectedId === null ? 'border-accent/30 bg-accent/[0.08]' : 'border-transparent hover:bg-white/[0.04]',
+                    )}
+                  >
+                    <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', selectedId === null ? 'bg-accent/15 text-accent' : 'bg-white/[0.05] text-ink-3')}>
+                      <Icon name="layers" size={17} />
+                    </span>
+                    <span className="min-w-0">
+                      <span className={cn('block truncate text-[13px] font-medium', selectedId === null ? 'text-white' : 'text-ink-2')}>All documents</span>
+                      <span className="block text-xs text-ink-3">Search across everything</span>
+                    </span>
+                  </button>
+                </li>
+              )}
+
+              {documents.map(doc => {
+                const active = selectedId === doc.document_id
+                const meta = [doc.chunks ? `${doc.chunks} chunks` : null, relativeTime(doc.uploaded_at) || null].filter(Boolean).join(' · ')
+                return (
+                  <li key={doc.document_id} className="group relative animate-fade-up">
+                    <button
+                      onClick={() => pick(doc)}
+                      aria-current={active}
+                      className={cn(
+                        'flex w-full items-center gap-3 rounded-xl border p-2.5 pr-10 text-left transition-colors',
+                        active ? 'border-accent/30 bg-accent/[0.08]' : 'border-transparent hover:bg-white/[0.04]',
+                      )}
+                    >
+                      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', active ? 'bg-accent/15 text-accent' : 'bg-white/[0.05] text-ink-3')}>
+                        <Icon name="file" size={17} />
+                      </span>
+                      <span className="min-w-0">
+                        <span className={cn('block truncate text-[13px] font-medium', active ? 'text-white' : 'text-ink-2')} title={doc.filename}>
+                          {stripExt(doc.filename)}
+                        </span>
+                        {meta && <span className="block truncate text-xs text-ink-3">{meta}</span>}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setPendingDelete(doc)}
+                      aria-label={`Delete ${doc.filename}`}
+                      className="icon-btn absolute right-1.5 top-1/2 -translate-y-1/2 opacity-100 hover:!bg-bad/10 hover:!text-bad md:opacity-0 md:focus-visible:opacity-100 md:group-hover:opacity-100"
+                    >
+                      <Icon name="trash" size={15} />
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </nav>
+
+        {/* footer */}
+        <div className="border-t border-line px-5 py-3.5">
+          <div className="flex items-center gap-2.5" role="status">
+            <span className={cn('h-2 w-2 rounded-full', st.dot)} />
+            <span className="text-xs text-ink-2">{st.label}</span>
+          </div>
+          <p className="mt-1.5 flex items-center gap-1.5 text-[11px] leading-snug text-ink-3">
+            <Icon name="shield" size={12} className="shrink-0" />
+            Documents are private to this browser.
+          </p>
         </div>
       </aside>
 
-      {showUpload && (
-        <UploadModal
-          onClose={() => setShowUpload(false)}
-          onUploadSuccess={() => { setShowUpload(false); fetchDocuments() }}
+      {pendingDelete && (
+        <ConfirmDialog
+          destructive
+          busy={deleting}
+          title="Delete this document?"
+          message={`“${stripExt(pendingDelete.filename)}” and its indexed content will be removed. Your chat history for it will be deleted too.`}
+          confirmLabel="Delete"
+          onConfirm={confirmDelete}
+          onCancel={() => setPendingDelete(null)}
         />
       )}
     </>
